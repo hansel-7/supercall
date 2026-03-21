@@ -19,6 +19,7 @@ const INTERIM_DEBOUNCE_MS = 1200;
 const INSIGHT_ANALYSIS_COOLDOWN_MS = 12000;
 const INSIGHT_MIN_FINAL_CHUNKS = 2;
 const INSIGHT_MIN_TEXT_LENGTH = 12;
+const QUALITATIVE_INSIGHT_CATEGORIES = ['fact', 'risk', 'obstacle', 'next_step', 'question'];
 
 app.use((req, res, next) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -94,13 +95,16 @@ app.get('/session/:sessionId/state', (req, res) => {
   const sessionId = req.params.sessionId || DEFAULT_SESSION_ID;
   const session = getSession(sessionId);
   normalizeLegacyInsightTypes(session);
+  const insights = Array.isArray(session.insights)
+    ? session.insights.map((insight) => enrichInsightForClient(insight))
+    : [];
   res.json({
     ok: true,
     sessionId,
     topic: session.topic || 'unknown',
     keyNumbers: session.keyNumbers || [],
     metricUpdates: session.metricUpdates || [],
-    insights: session.insights || [],
+    insights,
     lineCount: session.lines.length,
   });
 });
@@ -109,12 +113,16 @@ function normalizeLegacyInsightTypes(session) {
   if (!Array.isArray(session?.insights)) return;
   session.insights = session.insights
     .filter((insight) => String(insight?.type || '').toLowerCase() !== 'suggestion')
-    .filter((insight) => {
+    .map((insight) => {
       const key = String(insight?.metricKey || '').toLowerCase();
-      if (!key.startsWith('qual:')) return true;
-      return key.startsWith('qual:fact:');
-    })
-    .map((insight) => ({ ...insight, type: 'context' }));
+      const category = String(insight?.category || '').trim().toLowerCase();
+      const type = String(insight?.type || '').trim().toLowerCase();
+      if (type) return { ...insight, category };
+      if (key.startsWith('qual:')) {
+        return { ...insight, category: category || 'fact', type: 'context' };
+      }
+      return insight;
+    });
 }
 
 function getSession(sessionId) {
@@ -238,6 +246,7 @@ function upsertMetricInsight(session, metric) {
     id: existingIndex >= 0 ? insights[existingIndex].id : `${now}-${metricKey}`,
     metricKey,
     type: 'metric',
+    category: 'metric',
     title: metric.label,
     body: `${metric.label}: ${metric.value}`,
     highlight: [metric.value],
@@ -265,14 +274,63 @@ function normalizeInsightKey(value) {
 
 function mapInsightCategoryToType(category) {
   const c = String(category || '').toLowerCase();
-  if (!c) return 'context';
+  if (!c || c === 'fact') return 'context';
+  if (c === 'risk' || c === 'obstacle') return 'alert';
+  if (c === 'next_step') return 'suggestion';
+  if (c === 'question') return 'vc_question';
   return 'context';
 }
 
 function mapCategoryToMemoryKey(category) {
   const c = String(category || '').toLowerCase();
   if (c === 'fact') return 'facts';
+  if (c === 'risk') return 'risks';
+  if (c === 'obstacle') return 'obstacles';
+  if (c === 'next_step') return 'nextSteps';
   return '';
+}
+
+function getInsightFormatHint(category, type) {
+  const normalizedType = String(type || '').trim().toLowerCase();
+  const normalizedCategory = String(category || '').trim().toLowerCase();
+  const variant = normalizedType || 'context';
+  const badgeLabelByCategory = {
+    fact: 'Context',
+    risk: 'Risk',
+    obstacle: 'Obstacle',
+    next_step: 'Next Step',
+    question: 'Follow-up Q',
+    metric: 'Metric',
+  };
+  return {
+    variant,
+    badgeLabel: badgeLabelByCategory[normalizedCategory] || 'Context',
+    category: normalizedCategory || 'fact',
+  };
+}
+
+function buildInsightClassification(category, type) {
+  const normalizedCategory = String(category || '').trim().toLowerCase() || 'fact';
+  return {
+    category: normalizedCategory,
+    type: String(type || '').trim().toLowerCase() || mapInsightCategoryToType(normalizedCategory),
+  };
+}
+
+function enrichInsightForClient(insight) {
+  const type = String(insight?.type || '').trim().toLowerCase();
+  const category = String(insight?.category || '').trim().toLowerCase();
+  const classification = buildInsightClassification(
+    category || (type === 'metric' ? 'metric' : 'fact'),
+    type
+  );
+  return {
+    ...insight,
+    category: classification.category,
+    type: classification.type,
+    classification,
+    formatHint: getInsightFormatHint(classification.category, classification.type),
+  };
 }
 
 function mergeInsightMemory(session, topic, insightItems) {
@@ -352,6 +410,7 @@ function upsertQualitativeInsightCard(session, topic, insight) {
   const next = {
     id: existingIndex >= 0 ? insights[existingIndex].id : `${now}-${metricKey}`,
     metricKey,
+    category,
     type: mapInsightCategoryToType(category),
     title: `${title}`,
     body,
@@ -512,7 +571,7 @@ async function analyzeInsightsWithContext({ sessionId, latestText, detectedTopic
                   properties: {
                     category: {
                       type: 'string',
-                      enum: ['fact'],
+                      enum: QUALITATIVE_INSIGHT_CATEGORIES,
                     },
                     title: { type: 'string' },
                     body: { type: 'string' },
@@ -532,9 +591,9 @@ async function analyzeInsightsWithContext({ sessionId, latestText, detectedTopic
         {
           role: 'system',
           content:
-            'You create concise factual insights for a live sales assistant.\n' +
-            'Use detected topic as context, but output factual observations only.\n' +
-            'Do not output intentions, risks, obstacles, advice, or next steps.\n' +
+            'You create concise qualitative insights for a live sales assistant.\n' +
+            'Classify each insight category as one of: fact, risk, obstacle, next_step, question.\n' +
+            'Use fact when there is no explicit issue or action needed.\n' +
             'Return 1 item only and keep it short and specific.\n' +
             'Do not return numeric metrics.\n' +
             'Return strict JSON.',
@@ -572,7 +631,7 @@ async function analyzeInsightsWithContext({ sessionId, latestText, detectedTopic
               ? i.highlight.map((h) => String(h || '').trim()).filter(Boolean)
               : [],
           }))
-          .filter((i) => i.category === 'fact' && i.title && i.body)
+          .filter((i) => QUALITATIVE_INSIGHT_CATEGORIES.includes(i.category) && i.title && i.body)
           .slice(0, 1)
       : [];
     return insights;
@@ -584,12 +643,31 @@ async function analyzeInsightsWithContext({ sessionId, latestText, detectedTopic
 function deriveHeuristicInsights(detectedTopic, latestText) {
   const text = String(latestText || '').trim();
   if (!text) return [];
+  const lowerText = text.toLowerCase();
+
+  let category = 'fact';
+  let title = 'Current discussion point';
+  let body = 'Client shared a concrete discussion point.';
+
+  if (/\b(risk|problem|issue|blocked|blocker|concern)\b/.test(lowerText)) {
+    category = 'risk';
+    title = 'Potential risk surfaced';
+    body = 'Client language indicates a risk or concern in the current discussion.';
+  } else if (/\b(can you|could you|would you|what if|how)\b/.test(lowerText)) {
+    category = 'question';
+    title = 'Follow-up question surfaced';
+    body = 'Client asked a follow-up question that may need clarification.';
+  } else if (/\b(next step|follow up|schedule|confirm|send)\b/.test(lowerText)) {
+    category = 'next_step';
+    title = 'Next step identified';
+    body = 'Client signaled a concrete follow-up action.';
+  }
 
   const insights = [
     {
-      category: 'fact',
-      title: 'Current discussion point',
-      body: 'Client shared a concrete discussion point.',
+      category,
+      title,
+      body,
       highlight: [],
     },
   ];

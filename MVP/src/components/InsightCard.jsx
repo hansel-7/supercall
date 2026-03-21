@@ -63,7 +63,9 @@ function renderBody(text, phrases, highlightClass) {
 }
 
 export default function InsightCard({ insight }) {
-  const config = typeConfig[insight.type] || typeConfig.context;
+  const variant = String(insight?.formatHint?.variant || insight?.type || '').trim().toLowerCase();
+  const config = typeConfig[variant] || typeConfig.context;
+  const badgeLabel = String(insight?.formatHint?.badgeLabel || config.label || '').trim() || config.label;
   const Icon = config.icon;
 
   return (
@@ -76,7 +78,7 @@ export default function InsightCard({ insight }) {
           <div className="flex items-center gap-2 mb-1">
             <h4 className="text-sm font-semibold text-white truncate">{insight.title}</h4>
             <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full ${config.badge} flex-shrink-0`}>
-              {config.label}
+              {badgeLabel}
             </span>
           </div>
           <p className="text-xs text-gray-400 leading-relaxed">

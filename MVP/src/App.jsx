@@ -127,7 +127,7 @@ export default function App() {
           data.insights
             .filter((insight) => {
               const type = String(insight?.type || '').toLowerCase();
-              return type === 'context';
+              return type !== 'metric';
             })
             .forEach((insight) => {
               const key =
