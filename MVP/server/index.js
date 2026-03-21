@@ -1,5 +1,6 @@
 import express from 'express';
 import 'dotenv/config';
+import { randomUUID } from 'crypto';
 
 const app = express();
 const PORT = Number(process.env.PORT) || 3001;
@@ -30,6 +31,12 @@ app.get('/', (_req, res) => {
 
 app.get('/health', (_req, res) => {
   res.json({ ok: true });
+});
+
+app.post('/session', (_req, res) => {
+  const sessionId = randomUUID();
+  sessionStore.set(sessionId, { lines: [] });
+  res.json({ ok: true, sessionId });
 });
 
 function getSession(sessionId) {

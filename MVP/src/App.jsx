@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import { Phone } from 'lucide-react';
 import AIAssistantPanel from './components/AIAssistantPanel';
 import CallScreenMvp from './components/CallScreenMvp';
@@ -9,6 +9,25 @@ export default function App() {
   const sentLineCountRef = useRef(0);
   const lastInterimRef = useRef('');
   const serverUrl = import.meta.env.VITE_SERVER_URL || 'http://localhost:3001';
+  const sessionIdRef = useRef('default');
+
+  const handleStart = useCallback(async () => {
+    try {
+      const response = await fetch(`${serverUrl}/session`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      if (response.ok) {
+        const data = await response.json();
+        if (typeof data?.sessionId === 'string' && data.sessionId.trim()) {
+          sessionIdRef.current = data.sessionId.trim();
+        }
+      }
+    } catch {
+      sessionIdRef.current = 'default';
+    }
+    start();
+  }, [serverUrl, start]);
 
   useEffect(() => {
     if (lines.length < sentLineCountRef.current) {
@@ -24,6 +43,7 @@ export default function App() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          sessionId: sessionIdRef.current,
           type: 'final',
           text: line.text,
           at: line.at,
@@ -40,6 +60,7 @@ export default function App() {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
+        sessionId: sessionIdRef.current,
         type: 'interim',
         text: interim,
         at: Date.now(),
@@ -69,7 +90,7 @@ export default function App() {
           <CallScreenMvp
             supported={supported}
             listening={listening}
-            onStart={start}
+            onStart={handleStart}
             onStop={stop}
             onClear={clearLines}
             lines={lines}
