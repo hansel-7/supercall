@@ -100,7 +100,7 @@ export default function App() {
         <div className="flex-1 min-w-0">
           <AIAssistantPanel
             insights={sim.activeInsights}
-            sentimentHistory={sim.sentimentHistory}
+            metrics={sim.metrics}
             actionItems={sim.actionItems}
             isCallActive={sim.isCallActive}
             isPlaying={sim.isPlaying}

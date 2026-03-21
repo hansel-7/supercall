@@ -1,17 +1,8 @@
-import { useEffect, useRef } from 'react';
-import { AnimatePresence } from 'framer-motion';
+import { AnimatePresence, motion } from 'framer-motion';
 import InsightCard from './InsightCard';
 import { Sparkles } from 'lucide-react';
 
 export default function InsightFeed({ insights }) {
-  const scrollRef = useRef(null);
-
-  useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-    }
-  }, [insights]);
-
   if (insights.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center h-full text-gray-500 gap-2">
@@ -22,10 +13,19 @@ export default function InsightFeed({ insights }) {
   }
 
   return (
-    <div ref={scrollRef} className="h-full overflow-y-auto space-y-2 pr-1">
+    <div className="h-full flex flex-col justify-end overflow-hidden gap-2">
       <AnimatePresence mode="popLayout">
         {insights.map((insight, idx) => (
-          <InsightCard key={insight.id + '-' + idx} insight={insight} />
+          <motion.div
+            key={insight.id + '-' + idx}
+            layout
+            initial={{ opacity: 0, y: 24 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -16, transition: { duration: 0.2 } }}
+            transition={{ duration: 0.35, ease: 'easeOut' }}
+          >
+            <InsightCard insight={insight} />
+          </motion.div>
         ))}
       </AnimatePresence>
     </div>

@@ -5,7 +5,7 @@ export const callScript = [
     name: 'Sarah Chen',
     text: "Alex, great to reconnect. It's been about three weeks since our last call. I've been reviewing the materials you sent over.",
     durationMs: 4000,
-    triggers: ['context-prev-call', 'tp-growth-update'],
+    triggers: ['context-prev-call'],
   },
   {
     id: 2,
@@ -21,7 +21,7 @@ export const callScript = [
     name: 'Sarah Chen',
     text: "Let's dive in. Last time we talked, your ARR was at $1.8 million. Where are things standing now?",
     durationMs: 3500,
-    triggers: ['context-arr-prev', 'tp-arr-answer'],
+    triggers: ['context-arr-prev'],
   },
   {
     id: 4,
@@ -29,7 +29,8 @@ export const callScript = [
     name: 'Alex Rivera',
     text: "We've grown to $2.4 million ARR. That's a 33% increase in just three weeks, driven largely by two new enterprise contracts we closed.",
     durationMs: 4000,
-    triggers: [],
+    triggers: ['vcq-arr'],
+    metricUpdates: { arr: '$2.4M (+33%)' },
   },
   {
     id: 5,
@@ -37,7 +38,7 @@ export const callScript = [
     name: 'Sarah Chen',
     text: "That's impressive growth. Can you break down the revenue mix? How much is coming from enterprise versus SMB?",
     durationMs: 3500,
-    triggers: ['tp-revenue-mix'],
+    triggers: [],
   },
   {
     id: 6,
@@ -45,7 +46,8 @@ export const callScript = [
     name: 'Alex Rivera',
     text: "About 60% enterprise, 40% SMB now. The enterprise segment is growing faster — our average contract value went from $45K to $72K this quarter.",
     durationMs: 4000,
-    triggers: [],
+    triggers: ['vcq-rev-mix'],
+    metricUpdates: { revMix: '60% Ent / 40% SMB', acv: '$72K (+60%)' },
   },
   {
     id: 7,
@@ -53,7 +55,7 @@ export const callScript = [
     name: 'Sarah Chen',
     text: "Good. Now, one thing that came up in our partner meeting — your burn rate. Last time it was around $280K monthly. Has that changed?",
     durationMs: 4000,
-    triggers: ['alert-burn-rate', 'tp-burn-defense'],
+    triggers: ['alert-burn-rate'],
   },
   {
     id: 8,
@@ -61,7 +63,8 @@ export const callScript = [
     name: 'Alex Rivera',
     text: "It's gone up slightly to $310K, but that's deliberate. We hired three senior engineers to accelerate our enterprise platform features.",
     durationMs: 4000,
-    triggers: [],
+    triggers: ['vcq-burn'],
+    metricUpdates: { burn: '$310K/mo (+$30K)' },
   },
   {
     id: 9,
@@ -69,7 +72,7 @@ export const callScript = [
     name: 'Sarah Chen',
     text: "What's your current runway looking like with that burn rate?",
     durationMs: 3000,
-    triggers: ['tp-runway-answer'],
+    triggers: [],
   },
   {
     id: 10,
@@ -77,7 +80,8 @@ export const callScript = [
     name: 'Alex Rivera',
     text: "We have about 14 months of runway remaining. But with the Series A, we'd extend that to 24+ months while doubling the team.",
     durationMs: 3500,
-    triggers: [],
+    triggers: ['vcq-runway'],
+    metricUpdates: { runway: '14 months' },
   },
   {
     id: 11,
@@ -85,7 +89,7 @@ export const callScript = [
     name: 'Sarah Chen',
     text: "Let's talk about the competitive landscape. We've been hearing a lot about FinFlow launching a similar product. How do you see that?",
     durationMs: 4000,
-    triggers: ['alert-competition', 'tp-competitive-moat'],
+    triggers: ['alert-competition'],
   },
   {
     id: 12,
@@ -93,7 +97,7 @@ export const callScript = [
     name: 'Alex Rivera',
     text: "FinFlow is more focused on consumer payments. Our moat is the B2B compliance layer — we've built integrations with 12 major regulatory frameworks that took 18 months.",
     durationMs: 4500,
-    triggers: ['suggestion-moat-detail'],
+    triggers: ['vcq-moat'],
   },
   {
     id: 13,
@@ -101,7 +105,7 @@ export const callScript = [
     name: 'Sarah Chen',
     text: "That regulatory angle is interesting. What's the retention looking like? Are customers sticking around?",
     durationMs: 3500,
-    triggers: ['tp-retention-answer'],
+    triggers: [],
   },
   {
     id: 14,
@@ -109,7 +113,8 @@ export const callScript = [
     name: 'Alex Rivera',
     text: "Net revenue retention is at 127%. Gross retention is 94%. Churn is almost exclusively in the SMB segment — enterprise has been zero churn for the last two quarters.",
     durationMs: 4500,
-    triggers: [],
+    triggers: ['vcq-retention'],
+    metricUpdates: { nrr: '127%', grossRet: '94%' },
   },
   {
     id: 15,
@@ -117,7 +122,7 @@ export const callScript = [
     name: 'Sarah Chen',
     text: "127% NRR is strong. That tells me expansion revenue is working. What's driving the upsells?",
     durationMs: 3500,
-    triggers: ['context-nrr-benchmark', 'tp-upsell-drivers'],
+    triggers: ['context-nrr-benchmark'],
   },
   {
     id: 16,
@@ -125,7 +130,7 @@ export const callScript = [
     name: 'Alex Rivera',
     text: "Two things — our transaction volume tiers naturally expand as customers grow, and we launched an analytics add-on last month that 40% of enterprise clients have already adopted.",
     durationMs: 4500,
-    triggers: ['suggestion-analytics-highlight'],
+    triggers: ['vcq-upsell'],
   },
   {
     id: 17,
@@ -133,7 +138,7 @@ export const callScript = [
     name: 'Sarah Chen',
     text: "I want to talk about the team. Last time you mentioned you were looking for a VP of Engineering. Any progress there?",
     durationMs: 3500,
-    triggers: ['context-vpe-search', 'tp-vpe-hire'],
+    triggers: ['context-vpe-search'],
   },
   {
     id: 18,
@@ -141,7 +146,8 @@ export const callScript = [
     name: 'Alex Rivera',
     text: "Yes — we've extended an offer to David Park. He was previously at Stripe leading their infrastructure team for four years. He starts in two weeks.",
     durationMs: 4000,
-    triggers: ['suggestion-team-strength'],
+    triggers: ['vcq-vpe'],
+    metricUpdates: { vpEng: 'David Park (ex-Stripe)' },
   },
   {
     id: 19,
@@ -149,7 +155,7 @@ export const callScript = [
     name: 'Sarah Chen',
     text: "David Park from Stripe? That's a great hire. Our partners will be impressed. Now, let's discuss valuation expectations for this round.",
     durationMs: 4000,
-    triggers: ['alert-valuation-discussion', 'tp-valuation-pitch'],
+    triggers: ['alert-valuation-discussion'],
   },
   {
     id: 20,
@@ -157,7 +163,8 @@ export const callScript = [
     name: 'Alex Rivera',
     text: "We're looking at a $30 million pre-money valuation for a $8 million Series A. That puts us at roughly 12.5x forward ARR based on our projections.",
     durationMs: 4500,
-    triggers: ['context-valuation-prev'],
+    triggers: ['vcq-valuation', 'context-valuation-prev'],
+    metricUpdates: { valuation: '$30M pre / $8M raise' },
   },
   {
     id: 21,
@@ -165,7 +172,7 @@ export const callScript = [
     name: 'Sarah Chen',
     text: "12.5x is on the higher end for fintech at this stage. What gives you confidence in those forward projections?",
     durationMs: 3500,
-    triggers: ['alert-valuation-pushback', 'tp-valuation-defend'],
+    triggers: ['alert-valuation-pushback'],
   },
   {
     id: 22,
@@ -173,7 +180,8 @@ export const callScript = [
     name: 'Alex Rivera',
     text: "We have a signed pipeline of $1.2 million that converts within the next 90 days, plus LOIs from three Fortune 500 companies exploring our compliance platform.",
     durationMs: 4500,
-    triggers: ['suggestion-social-proof'],
+    triggers: ['vcq-pipeline'],
+    metricUpdates: { pipeline: '$1.2M signed (90-day)' },
   },
   {
     id: 23,
@@ -181,7 +189,7 @@ export const callScript = [
     name: 'Sarah Chen',
     text: "The Fortune 500 LOIs are compelling. Can you share which companies, or is that under NDA?",
     durationMs: 3000,
-    triggers: ['tp-nda-response'],
+    triggers: [],
   },
   {
     id: 24,
@@ -189,7 +197,7 @@ export const callScript = [
     name: 'Alex Rivera',
     text: "Two are under NDA, but I can share that one is a top-5 US bank. We're in their vendor approval process now, expecting final sign-off next month.",
     durationMs: 4000,
-    triggers: [],
+    triggers: ['vcq-bank'],
   },
   {
     id: 25,
@@ -197,7 +205,7 @@ export const callScript = [
     name: 'Sarah Chen',
     text: "That would be a landmark deal. What about use of funds? If we write this check, where does the $8 million go?",
     durationMs: 3500,
-    triggers: ['tp-use-of-funds'],
+    triggers: [],
   },
   {
     id: 26,
@@ -205,7 +213,7 @@ export const callScript = [
     name: 'Alex Rivera',
     text: "Roughly 50% on engineering — building out the enterprise platform and SOC 2 compliance. 30% on sales, expanding our enterprise team to 8 reps. 20% on operations and infrastructure.",
     durationMs: 4500,
-    triggers: [],
+    triggers: ['vcq-funds'],
   },
   {
     id: 27,
@@ -213,7 +221,7 @@ export const callScript = [
     name: 'Sarah Chen',
     text: "That allocation makes sense. I should tell you — I'm presenting NovaPay to our investment committee next Tuesday. I'm cautiously optimistic.",
     durationMs: 4000,
-    triggers: ['alert-ic-meeting', 'tp-ic-offer'],
+    triggers: ['alert-ic-meeting'],
   },
   {
     id: 28,
@@ -221,7 +229,7 @@ export const callScript = [
     name: 'Alex Rivera',
     text: "That's great to hear, Sarah. What additional materials would be helpful for the IC presentation? We can turn things around quickly.",
     durationMs: 3500,
-    triggers: [],
+    triggers: ['vcq-ic-risk'],
   },
   {
     id: 29,

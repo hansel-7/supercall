@@ -1,5 +1,4 @@
-import { motion } from 'framer-motion';
-import { TrendingUp, AlertTriangle, Lightbulb, History, MessageCircle } from 'lucide-react';
+import { TrendingUp, AlertTriangle, Lightbulb, History, HelpCircle } from 'lucide-react';
 
 const typeConfig = {
   metric: {
@@ -34,13 +33,13 @@ const typeConfig = {
     badge: 'bg-purple-500/20 text-purple-300',
     label: 'Context',
   },
-  talking_point: {
-    icon: MessageCircle,
+  vc_question: {
+    icon: HelpCircle,
     bg: 'bg-cyan-500/15',
     border: 'border-cyan-400/40',
     iconColor: 'text-cyan-400',
     badge: 'bg-cyan-500/25 text-cyan-300',
-    label: 'Talking Point',
+    label: 'Follow-up Q',
   },
 };
 
@@ -49,12 +48,7 @@ export default function InsightCard({ insight }) {
   const Icon = config.icon;
 
   return (
-    <motion.div
-      initial={{ opacity: 0, x: 30, scale: 0.95 }}
-      animate={{ opacity: 1, x: 0, scale: 1 }}
-      transition={{ duration: 0.4, ease: 'easeOut' }}
-      className={`${config.bg} ${config.border} border rounded-lg p-3 transition-all hover:brightness-110`}
-    >
+    <div className={`${config.bg} ${config.border} border rounded-lg p-3 transition-all hover:brightness-110`}>
       <div className="flex items-start gap-2.5">
         <div className={`mt-0.5 ${config.iconColor}`}>
           <Icon className="w-4 h-4" />
@@ -69,6 +63,6 @@ export default function InsightCard({ insight }) {
           <p className="text-xs text-gray-400 leading-relaxed">{insight.body}</p>
         </div>
       </div>
-    </motion.div>
+    </div>
   );
 }

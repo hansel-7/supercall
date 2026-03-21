@@ -4,6 +4,19 @@ import { insights } from '../data/insights';
 
 const DEFAULT_STEP_DURATION = 4000;
 
+const INITIAL_METRICS = [
+  { key: 'arr',           label: 'ARR',                prev: '$1.8M',            current: null },
+  { key: 'revMix',        label: 'Rev Mix (Ent)',       prev: '~40%',             current: null },
+  { key: 'acv',           label: 'Avg Contract Value',  prev: '$45K',             current: null },
+  { key: 'burn',          label: 'Monthly Burn',        prev: '$280K',            current: null },
+  { key: 'runway',        label: 'Runway',              prev: '~16 months',       current: null },
+  { key: 'nrr',           label: 'NRR',                 prev: '118%',             current: null },
+  { key: 'grossRet',      label: 'Gross Retention',     prev: '91%',              current: null },
+  { key: 'vpEng',         label: 'VP Engineering',      prev: 'Open search',      current: null },
+  { key: 'valuation',     label: 'Valuation Ask',       prev: '$25–30M (range)',  current: null },
+  { key: 'pipeline',      label: 'Signed Pipeline',     prev: 'N/A',              current: null },
+];
+
 export function useCallSimulation(getStepDuration) {
   const [currentIndex, setCurrentIndex] = useState(-1);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -13,13 +26,11 @@ export function useCallSimulation(getStepDuration) {
   const [callDuration, setCallDuration] = useState(0);
   const [isCallActive, setIsCallActive] = useState(false);
   const [actionItems, setActionItems] = useState([]);
-  const [sentimentHistory, setSentimentHistory] = useState({
-    vcInterest: [55],
-    founderConfidence: [70],
-  });
+  const [metrics, setMetrics] = useState(INITIAL_METRICS);
 
-  const timerRef = useRef(null);       // controls when next step starts
-  const insightTimerRef = useRef(null); // controls when insights for current step fire
+  const timerRef = useRef(null);
+  const insightTimerRef = useRef(null);
+  const metricsTimerRef = useRef(null);
   const durationRef = useRef(null);
   const isPlayingRef = useRef(false);
   const advanceStepRef = useRef(null);
@@ -29,36 +40,18 @@ export function useCallSimulation(getStepDuration) {
     getStepDurationRef.current = getStepDuration;
   }, [getStepDuration]);
 
-  const computeSentiment = useCallback((step, prev) => {
-    let vcDelta = 0;
-    let founderDelta = 0;
-
-    const triggers = step.triggers || [];
-    for (const t of triggers) {
-      const insight = insights[t];
-      if (!insight) continue;
-      if (insight.type === 'metric') { vcDelta += 1.5; founderDelta += 1; }
-      if (insight.type === 'alert') { vcDelta -= 1.5; founderDelta -= 0.5; }
-      if (insight.type === 'suggestion') { founderDelta += 1; }
-      if (insight.type === 'context') { vcDelta += 0.5; }
-    }
-
-    if (step.speaker === 'founder') founderDelta += 0.5;
-    if (step.speaker === 'vc') vcDelta += 0.5;
-
-    const lastVc = prev.vcInterest[prev.vcInterest.length - 1];
-    const lastFounder = prev.founderConfidence[prev.founderConfidence.length - 1];
-
-    return {
-      vcInterest: [...prev.vcInterest, Math.round(Math.min(95, Math.max(10, lastVc + vcDelta)))],
-      founderConfidence: [
-        ...prev.founderConfidence,
-        Math.round(Math.min(95, Math.max(10, lastFounder + founderDelta))),
-      ],
-    };
+  // Apply metric updates from a step immediately when the step starts
+  const applyMetricUpdates = useCallback((step) => {
+    if (!step.metricUpdates) return;
+    setMetrics((prev) =>
+      prev.map((m) =>
+        step.metricUpdates[m.key] != null
+          ? { ...m, current: step.metricUpdates[m.key] }
+          : m
+      )
+    );
   }, []);
 
-  // Fires insights and action items — called near the END of a step's audio
   const fireInsightsForStep = useCallback((step) => {
     if (!step.triggers || step.triggers.length === 0) return;
 
@@ -97,22 +90,26 @@ export function useCallSimulation(getStepDuration) {
       const step = callScript[next];
       const stepDuration = getStepDurationRef.current?.(next) ?? DEFAULT_STEP_DURATION;
 
-      // Immediately: update speaker + transcript so word reveal starts with the audio
       setCurrentSpeaker(step.speaker);
       setTranscript((t) => [...t, { speaker: step.speaker, name: step.name, text: step.text }]);
-      setSentimentHistory((prev) => computeSentiment(step, prev));
 
-      // Insight timing is different per speaker:
-      // - VC turn (Sarah speaking): fire at 65% so Alex sees talking points while Sarah finishes
-      // - Founder turn (Alex speaking): fire at 90% as confirmation after he's said it
+      // Update metrics after Alex finishes speaking (at full step duration)
+      if (metricsTimerRef.current) clearTimeout(metricsTimerRef.current);
+      if (step.speaker === 'founder' && step.metricUpdates) {
+        metricsTimerRef.current = setTimeout(() => {
+          applyMetricUpdates(step);
+        }, stepDuration);
+      }
+
+      // Insight timing: VC turns fire at 65% (context while Sarah is still talking),
+      // founder turns fire at 85% (VC follow-up questions as Alex wraps up)
       if (insightTimerRef.current) clearTimeout(insightTimerRef.current);
-      const insightRatio = step.speaker === 'vc' ? 0.65 : 0.90;
+      const insightRatio = step.speaker === 'vc' ? 0.65 : 0.85;
       const insightDelay = Math.max(500, stepDuration * insightRatio);
       insightTimerRef.current = setTimeout(() => {
         fireInsightsForStep(step);
       }, insightDelay);
 
-      // Schedule the next turn after the full audio duration
       if (timerRef.current) clearTimeout(timerRef.current);
       timerRef.current = setTimeout(() => {
         if (isPlayingRef.current) advanceStepRef.current?.();
@@ -120,7 +117,7 @@ export function useCallSimulation(getStepDuration) {
 
       return next;
     });
-  }, [computeSentiment, fireInsightsForStep]);
+  }, [applyMetricUpdates, fireInsightsForStep]);
 
   advanceStepRef.current = advanceStep;
 
@@ -137,6 +134,7 @@ export function useCallSimulation(getStepDuration) {
     setIsPlaying(false);
     if (timerRef.current) { clearTimeout(timerRef.current); timerRef.current = null; }
     if (insightTimerRef.current) { clearTimeout(insightTimerRef.current); insightTimerRef.current = null; }
+    if (metricsTimerRef.current) { clearTimeout(metricsTimerRef.current); metricsTimerRef.current = null; }
   }, []);
 
   const restart = useCallback(() => {
@@ -144,6 +142,7 @@ export function useCallSimulation(getStepDuration) {
     setIsPlaying(false);
     if (timerRef.current) { clearTimeout(timerRef.current); timerRef.current = null; }
     if (insightTimerRef.current) { clearTimeout(insightTimerRef.current); insightTimerRef.current = null; }
+    if (metricsTimerRef.current) { clearTimeout(metricsTimerRef.current); metricsTimerRef.current = null; }
     setCurrentIndex(-1);
     setTranscript([]);
     setActiveInsights([]);
@@ -151,7 +150,7 @@ export function useCallSimulation(getStepDuration) {
     setCallDuration(0);
     setIsCallActive(false);
     setActionItems([]);
-    setSentimentHistory({ vcInterest: [55], founderConfidence: [70] });
+    setMetrics(INITIAL_METRICS);
   }, []);
 
   useEffect(() => {
@@ -174,7 +173,7 @@ export function useCallSimulation(getStepDuration) {
     transcript,
     activeInsights,
     actionItems,
-    sentimentHistory,
+    metrics,
     callDuration,
     isPlaying,
     isCallActive,
