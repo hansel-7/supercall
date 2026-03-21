@@ -3,7 +3,7 @@ import { callScript } from '../data/callScript';
 import { fetchSpeech } from '../lib/tts';
 
 const API_KEY = import.meta.env.VITE_OPENAI_API_KEY;
-const PLAYBACK_RATE = 1.3;
+const PLAYBACK_RATE = 1.1;
 
 function measureDurationMs(blobUrl) {
   return new Promise((resolve) => {
