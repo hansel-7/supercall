@@ -4,8 +4,8 @@ const VOICES = {
 };
 
 const INSTRUCTIONS = {
-  vc: 'You are Sarah Chen, a seasoned venture capital partner conducting a due diligence follow-up call. Speak in a measured, analytical, and professional tone. Be direct and inquisitive.',
-  founder: 'You are Alex Rivera, a confident and passionate startup founder pitching to investors. Speak with conviction and enthusiasm. Be clear and persuasive when discussing your company metrics.',
+  vc: 'You are Sarah Chen, a seasoned venture capital partner conducting a due diligence follow-up call. Speak at a brisk, confident pace — like someone who values efficiency. Be direct, analytical, and inquisitive.',
+  founder: 'You are Alex Rivera, a confident and passionate startup founder pitching to investors. Speak at a quick, energetic pace. Be enthusiastic and persuasive. Deliver numbers and metrics crisply.',
 };
 
 export async function fetchSpeech(text, speaker, apiKey) {
@@ -21,6 +21,7 @@ export async function fetchSpeech(text, speaker, apiKey) {
       voice: VOICES[speaker],
       response_format: 'mp3',
       instructions: INSTRUCTIONS[speaker],
+      speed: 1.25,
     }),
   });
 
