@@ -131,7 +131,7 @@ export default function App() {
               }
             });
           const nextInsights = Array.from(deduped.values())
-            .sort((a, b) => Number(b?.updatedAt || 0) - Number(a?.updatedAt || 0))
+            .sort((a, b) => Number(a?.updatedAt || 0) - Number(b?.updatedAt || 0))
             .slice(0, 12);
           setInsights(nextInsights);
         } else {
