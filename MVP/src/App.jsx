@@ -125,7 +125,10 @@ export default function App() {
         if (Array.isArray(data?.insights)) {
           const deduped = new Map();
           data.insights
-            .filter((insight) => String(insight?.type || '').toLowerCase() !== 'metric')
+            .filter((insight) => {
+              const type = String(insight?.type || '').toLowerCase();
+              return type === 'context';
+            })
             .forEach((insight) => {
               const key =
                 String(insight?.metricKey || insight?.id || '')

@@ -16,8 +16,9 @@ const DEFAULT_SESSION_ID = 'default';
 const sessionStore = new Map();
 const ANALYSIS_COOLDOWN_MS = 3000;
 const INTERIM_DEBOUNCE_MS = 1200;
-const INSIGHT_ANALYSIS_COOLDOWN_MS = 15000;
-const INSIGHT_INTERIM_DEBOUNCE_MS = 4000;
+const INSIGHT_ANALYSIS_COOLDOWN_MS = 12000;
+const INSIGHT_MIN_FINAL_CHUNKS = 2;
+const INSIGHT_MIN_TEXT_LENGTH = 12;
 
 app.use((req, res, next) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -43,7 +44,21 @@ app.get('/health', (_req, res) => {
   res.json({ ok: true });
 });
 
+function clearAllSessionMemory() {
+  sessionStore.forEach((session) => {
+    if (session?.analysisTimer) {
+      clearTimeout(session.analysisTimer);
+    }
+    if (session?.insightAnalysisTimer) {
+      clearTimeout(session.insightAnalysisTimer);
+    }
+  });
+  sessionStore.clear();
+}
+
 app.post('/session', (_req, res) => {
+  // Starting a new session should fully reset in-memory server state.
+  clearAllSessionMemory();
   const sessionId = randomUUID();
   sessionStore.set(sessionId, {
     lines: [],
@@ -59,7 +74,9 @@ app.post('/session', (_req, res) => {
     lastInsightAnalyzedAt: 0,
     pendingLatestText: '',
     pendingInsightLatestText: '',
+    pendingInsightFinalCount: 0,
     pendingInsightTopic: 'unknown',
+    lastInsightSourceText: '',
     insightMemory: {
       lastTopic: 'unknown',
       facts: [],
@@ -76,6 +93,7 @@ app.post('/session', (_req, res) => {
 app.get('/session/:sessionId/state', (req, res) => {
   const sessionId = req.params.sessionId || DEFAULT_SESSION_ID;
   const session = getSession(sessionId);
+  normalizeLegacyInsightTypes(session);
   res.json({
     ok: true,
     sessionId,
@@ -86,6 +104,18 @@ app.get('/session/:sessionId/state', (req, res) => {
     lineCount: session.lines.length,
   });
 });
+
+function normalizeLegacyInsightTypes(session) {
+  if (!Array.isArray(session?.insights)) return;
+  session.insights = session.insights
+    .filter((insight) => String(insight?.type || '').toLowerCase() !== 'suggestion')
+    .filter((insight) => {
+      const key = String(insight?.metricKey || '').toLowerCase();
+      if (!key.startsWith('qual:')) return true;
+      return key.startsWith('qual:fact:');
+    })
+    .map((insight) => ({ ...insight, type: 'context' }));
+}
 
 function getSession(sessionId) {
   if (!sessionStore.has(sessionId)) {
@@ -103,7 +133,9 @@ function getSession(sessionId) {
       lastInsightAnalyzedAt: 0,
       pendingLatestText: '',
       pendingInsightLatestText: '',
+      pendingInsightFinalCount: 0,
       pendingInsightTopic: 'unknown',
+      lastInsightSourceText: '',
       insightMemory: {
         lastTopic: 'unknown',
         facts: [],
@@ -233,19 +265,14 @@ function normalizeInsightKey(value) {
 
 function mapInsightCategoryToType(category) {
   const c = String(category || '').toLowerCase();
-  if (c === 'risk' || c === 'obstacle') return 'alert';
-  if (c === 'intention' || c === 'next_step') return 'suggestion';
+  if (!c) return 'context';
   return 'context';
 }
 
 function mapCategoryToMemoryKey(category) {
   const c = String(category || '').toLowerCase();
   if (c === 'fact') return 'facts';
-  if (c === 'intention') return 'intentions';
-  if (c === 'result') return 'results';
-  if (c === 'risk') return 'risks';
-  if (c === 'obstacle') return 'obstacles';
-  return 'nextSteps';
+  return '';
 }
 
 function mergeInsightMemory(session, topic, insightItems) {
@@ -262,6 +289,7 @@ function mergeInsightMemory(session, topic, insightItems) {
 
   insightItems.forEach((insight) => {
     const key = mapCategoryToMemoryKey(insight.category);
+    if (!key) return;
     const list = Array.isArray(memory[key]) ? memory[key] : [];
     const candidate = {
       title: insight.title,
@@ -484,7 +512,7 @@ async function analyzeInsightsWithContext({ sessionId, latestText, detectedTopic
                   properties: {
                     category: {
                       type: 'string',
-                      enum: ['fact', 'intention', 'result', 'risk', 'obstacle', 'next_step'],
+                      enum: ['fact'],
                     },
                     title: { type: 'string' },
                     body: { type: 'string' },
@@ -504,11 +532,11 @@ async function analyzeInsightsWithContext({ sessionId, latestText, detectedTopic
         {
           role: 'system',
           content:
-            'You create concise qualitative insights for a live sales assistant.\n' +
-            'Use detected topic as primary context.\n' +
-            'Focus on facts, intentions, results, risks, obstacles, and next steps.\n' +
-            'Return 1 item only, each short and specific.\n' +
-            'Do not return numeric metrics here.\n' +
+            'You create concise factual insights for a live sales assistant.\n' +
+            'Use detected topic as context, but output factual observations only.\n' +
+            'Do not output intentions, risks, obstacles, advice, or next steps.\n' +
+            'Return 1 item only and keep it short and specific.\n' +
+            'Do not return numeric metrics.\n' +
             'Return strict JSON.',
         },
         {
@@ -531,7 +559,7 @@ async function analyzeInsightsWithContext({ sessionId, latestText, detectedTopic
 
   const data = await response.json();
   const raw = data?.choices?.[0]?.message?.content?.trim() ?? '';
-  if (!raw) return deriveHeuristicInsights(detectedTopic, latestText);
+  if (!raw) return [];
   try {
     const parsed = JSON.parse(raw);
     const insights = Array.isArray(parsed?.insights)
@@ -544,19 +572,18 @@ async function analyzeInsightsWithContext({ sessionId, latestText, detectedTopic
               ? i.highlight.map((h) => String(h || '').trim()).filter(Boolean)
               : [],
           }))
-          .filter((i) => i.category && i.title && i.body)
+          .filter((i) => i.category === 'fact' && i.title && i.body)
           .slice(0, 1)
       : [];
-    return insights.length > 0 ? insights : deriveHeuristicInsights(detectedTopic, latestText);
+    return insights;
   } catch {
-    return deriveHeuristicInsights(detectedTopic, latestText);
+    return [];
   }
 }
 
 function deriveHeuristicInsights(detectedTopic, latestText) {
   const text = String(latestText || '').trim();
   if (!text) return [];
-  const lower = text.toLowerCase();
 
   const insights = [
     {
@@ -567,34 +594,22 @@ function deriveHeuristicInsights(detectedTopic, latestText) {
     },
   ];
 
-  if (/\b(need|want|looking for|prefer|hope)\b/.test(lower)) {
-    insights.push({
-      category: 'intention',
-      title: 'Client intention detected',
-      body: text.slice(0, 180),
-      highlight: ['need', 'want', 'looking for', 'prefer'],
-    });
-  }
-
-  if (/\b(not sure|unsure|concern|worry|expensive|pricey|too high|risk)\b/.test(lower)) {
-    insights.push({
-      category: 'risk',
-      title: 'Potential objection',
-      body: `Client signals concern: "${text.slice(0, 160)}"`,
-      highlight: ['not sure', 'concern', 'expensive', 'pricey', 'too high', 'risk'],
-    });
-  }
-
-  if (/\b(next step|follow up|tomorrow|next week|schedule|send)\b/.test(lower)) {
-    insights.push({
-      category: 'next_step',
-      title: 'Next step candidate',
-      body: text.slice(0, 180),
-      highlight: ['next step', 'follow up', 'schedule', 'send'],
-    });
-  }
-
   return insights.slice(0, 1);
+}
+
+function normalizeInsightSourceText(text) {
+  return String(text || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+}
+
+function hasHighPriorityInsightSignal(text) {
+  const t = String(text || '').toLowerCase();
+  if (!t) return false;
+  return /\b(risk|problem|issue|blocked|not sure|unsure|expensive|pricey|too high|deadline|next step|follow up|schedule|confirm)\b/.test(
+    t
+  );
 }
 
 function deriveTopicHeuristic(text) {
@@ -685,9 +700,11 @@ function runMetricAnalysisNow(sessionId) {
         );
       }
 
-      const latestInsightText = s.pendingInsightLatestText || latestText;
-      s.pendingInsightLatestText = latestInsightText;
-      s.pendingInsightTopic = topic;
+      const latestInsightText = String(s.pendingInsightLatestText || '').trim();
+      if (latestInsightText) {
+        s.pendingInsightLatestText = latestInsightText;
+        s.pendingInsightTopic = topic;
+      }
     })
     .catch((err) => {
       console.error(`[${ts}] [${sessionId}] [analysis:error] ${err.message}`);
@@ -705,6 +722,17 @@ function runInsightAnalysisNow(sessionId, detectedTopic) {
   const session = getSession(sessionId);
   const latestText = String(session.pendingInsightLatestText || '').trim();
   if (!latestText || session.insightAnalysisInFlight) return;
+  if (latestText.length < INSIGHT_MIN_TEXT_LENGTH) {
+    session.pendingInsightLatestText = '';
+    session.pendingInsightFinalCount = 0;
+    return;
+  }
+  const normalizedSource = normalizeInsightSourceText(latestText);
+  if (normalizedSource && normalizedSource === session.lastInsightSourceText) {
+    session.pendingInsightLatestText = '';
+    session.pendingInsightFinalCount = 0;
+    return;
+  }
 
   session.insightAnalysisInFlight = true;
   session.pendingInsightLatestText = '';
@@ -734,16 +762,24 @@ function runInsightAnalysisNow(sessionId, detectedTopic) {
     .finally(() => {
       const s = getSession(sessionId);
       s.insightAnalysisInFlight = false;
+      s.lastInsightSourceText = normalizedSource;
+      s.pendingInsightFinalCount = 0;
       if (s.pendingInsightLatestText) {
-        scheduleInsightAnalysis(sessionId, 'interim', s.pendingInsightTopic || s.topic);
+        scheduleInsightAnalysis(sessionId, 'final', s.pendingInsightTopic || s.topic);
       }
     });
 }
 
 function scheduleInsightAnalysis(sessionId, chunkType, detectedTopic) {
   const session = getSession(sessionId);
+  if (chunkType !== 'final') return;
   if (typeof detectedTopic === 'string' && detectedTopic.trim()) {
     session.pendingInsightTopic = detectedTopic.trim();
+  }
+  const pendingText = String(session.pendingInsightLatestText || '').trim();
+  const hasSignal = hasHighPriorityInsightSignal(pendingText);
+  if (session.pendingInsightFinalCount < INSIGHT_MIN_FINAL_CHUNKS && !hasSignal) {
+    return;
   }
 
   if (session.insightAnalysisTimer) {
@@ -754,8 +790,7 @@ function scheduleInsightAnalysis(sessionId, chunkType, detectedTopic) {
   const now = Date.now();
   const elapsed = now - (session.lastInsightAnalyzedAt || 0);
   const cooldownWait = Math.max(0, INSIGHT_ANALYSIS_COOLDOWN_MS - elapsed);
-  const debounceWait = chunkType === 'final' ? 0 : INSIGHT_INTERIM_DEBOUNCE_MS;
-  const waitMs = Math.max(cooldownWait, debounceWait);
+  const waitMs = cooldownWait;
 
   if (waitMs === 0) {
     runInsightAnalysisNow(sessionId, session.pendingInsightTopic || session.topic);
@@ -813,6 +848,7 @@ app.post('/transcript', (req, res) => {
   session.pendingLatestText = text.trim();
   if (normalizedType === 'final') {
     session.pendingInsightLatestText = text.trim();
+    session.pendingInsightFinalCount = Number(session.pendingInsightFinalCount || 0) + 1;
     scheduleInsightAnalysis(normalizedSessionId, normalizedType, session.topic);
   }
   scheduleAnalysis(normalizedSessionId, normalizedType);
