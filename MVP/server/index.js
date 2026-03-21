@@ -39,6 +39,9 @@ app.post('/session', (_req, res) => {
   const sessionId = randomUUID();
   sessionStore.set(sessionId, {
     lines: [],
+    topic: 'unknown',
+    keyNumbers: [],
+    insights: [],
     analysisInFlight: false,
     analysisTimer: null,
     lastAnalyzedAt: 0,
@@ -47,10 +50,26 @@ app.post('/session', (_req, res) => {
   res.json({ ok: true, sessionId });
 });
 
+app.get('/session/:sessionId/state', (req, res) => {
+  const sessionId = req.params.sessionId || DEFAULT_SESSION_ID;
+  const session = getSession(sessionId);
+  res.json({
+    ok: true,
+    sessionId,
+    topic: session.topic || 'unknown',
+    keyNumbers: session.keyNumbers || [],
+    insights: session.insights || [],
+    lineCount: session.lines.length,
+  });
+});
+
 function getSession(sessionId) {
   if (!sessionStore.has(sessionId)) {
     sessionStore.set(sessionId, {
       lines: [],
+      topic: 'unknown',
+      keyNumbers: [],
+      insights: [],
       analysisInFlight: false,
       analysisTimer: null,
       lastAnalyzedAt: 0,
@@ -79,6 +98,7 @@ async function analyzeWithContext({ sessionId, latestText }) {
     .map((l) => `[${l.type}] ${l.text}`)
     .join('\n')
     .slice(-12000);
+  const previousTopic = session.topic || 'unknown';
 
   const response = await fetch('https://api.openai.com/v1/chat/completions', {
     method: 'POST',
@@ -92,13 +112,25 @@ async function analyzeWithContext({ sessionId, latestText }) {
       response_format: {
         type: 'json_schema',
         json_schema: {
-          name: 'topic_result',
+          name: 'topic_numbers_result',
           schema: {
             type: 'object',
             properties: {
               topic: { type: 'string' },
+              keyNumbers: {
+                type: 'array',
+                items: {
+                  type: 'object',
+                  properties: {
+                    label: { type: 'string' },
+                    value: { type: 'string' },
+                  },
+                  required: ['label', 'value'],
+                  additionalProperties: false,
+                },
+              },
             },
-            required: ['topic'],
+            required: ['topic', 'keyNumbers'],
             additionalProperties: false,
           },
         },
@@ -108,13 +140,17 @@ async function analyzeWithContext({ sessionId, latestText }) {
           role: 'system',
           content:
             'You analyze streaming conversation transcript with context memory.\n' +
-            'Identify the current conversation topic in 3-8 words.\n' +
-            'Return JSON: {"topic":"..."}',
+            'Task 1: identify current topic in 3-8 words.\n' +
+            'Task 2: extract key numbers that are relevant to that topic only.\n' +
+            'Each number must include a short semantic label.\n' +
+            'If no topic-relevant number appears, return an empty keyNumbers array.\n' +
+            'Return JSON: {"topic":"...","keyNumbers":[{"label":"...","value":"..."}]}',
         },
         {
           role: 'user',
           content:
             `Session: ${sessionId}\n` +
+            `Previous topic: ${previousTopic}\n` +
             `Conversation context (oldest to newest):\n${contextText}\n\n` +
             `Latest chunk to focus on:\n${latestText}`,
         },
@@ -129,14 +165,22 @@ async function analyzeWithContext({ sessionId, latestText }) {
 
   const data = await response.json();
   const raw = data?.choices?.[0]?.message?.content?.trim() ?? '';
-  if (!raw) return { topic: deriveTopicHeuristic(latestText) };
+  if (!raw) return { topic: deriveTopicHeuristic(latestText), keyNumbers: [] };
 
   try {
     const parsed = JSON.parse(raw);
     const topic = typeof parsed?.topic === 'string' && parsed.topic.trim()
       ? parsed.topic.trim()
-      : 'unknown';
-    return { topic };
+      : deriveTopicHeuristic(latestText);
+    const keyNumbers = Array.isArray(parsed?.keyNumbers)
+      ? parsed.keyNumbers
+          .map((k) => ({
+            label: typeof k?.label === 'string' ? k.label.trim() : '',
+            value: typeof k?.value === 'string' ? k.value.trim() : '',
+          }))
+          .filter((k) => k.label && k.value)
+      : [];
+    return { topic, keyNumbers };
   } catch {
     // fallback below
   }
@@ -149,7 +193,7 @@ async function analyzeWithContext({ sessionId, latestText }) {
       .replace(/^topic\s*:\s*/i, '')
       .trim() || deriveTopicHeuristic(latestText);
 
-  return { topic: maybeTopic };
+  return { topic: maybeTopic, keyNumbers: [] };
 }
 
 function deriveTopicHeuristic(text) {
@@ -178,10 +222,41 @@ function runAnalysisNow(sessionId) {
   const ts = new Date().toISOString();
 
   analyzeWithContext({ sessionId, latestText })
-    .then(({ topic }) => {
+    .then(({ topic, keyNumbers }) => {
       const s = getSession(sessionId);
       s.lastAnalyzedAt = Date.now();
+      s.topic = topic;
+
+      if (Array.isArray(keyNumbers) && keyNumbers.length > 0) {
+        const mergedByLabel = new Map((s.keyNumbers || []).map((k) => [k.label.toLowerCase(), k]));
+        keyNumbers.forEach((k) => {
+          mergedByLabel.set(k.label.toLowerCase(), {
+            label: k.label,
+            value: k.value,
+            updatedAt: Date.now(),
+          });
+        });
+        s.keyNumbers = Array.from(mergedByLabel.values());
+        s.insights = [
+          ...(s.insights || []).slice(-24),
+          {
+            id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+            type: 'metric',
+            title: `Topic: ${topic}`,
+            body: keyNumbers.map((k) => `${k.label}: ${k.value}`).join(' · '),
+            highlight: keyNumbers.map((k) => k.value),
+          },
+        ];
+      }
+
       console.log(`[${ts}] [${sessionId}] [topic] ${topic}`);
+      if (Array.isArray(keyNumbers) && keyNumbers.length > 0) {
+        console.log(
+          `[${ts}] [${sessionId}] [keyNumbers] ${keyNumbers
+            .map((k) => `${k.label}=${k.value}`)
+            .join(', ')}`
+        );
+      }
     })
     .catch((err) => {
       console.error(`[${ts}] [${sessionId}] [analysis:error] ${err.message}`);

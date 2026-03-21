@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Phone } from 'lucide-react';
 import AIAssistantPanel from './components/AIAssistantPanel';
 import CallScreenMvp from './components/CallScreenMvp';
@@ -10,6 +10,10 @@ export default function App() {
   const lastInterimRef = useRef('');
   const serverUrl = import.meta.env.VITE_SERVER_URL || 'http://localhost:3001';
   const sessionIdRef = useRef('default');
+  const [activeSessionId, setActiveSessionId] = useState('default');
+  const [topic, setTopic] = useState('unknown');
+  const [keyNumbers, setKeyNumbers] = useState([]);
+  const [insights, setInsights] = useState([]);
 
   const handleStart = useCallback(async () => {
     try {
@@ -20,14 +24,33 @@ export default function App() {
       if (response.ok) {
         const data = await response.json();
         if (typeof data?.sessionId === 'string' && data.sessionId.trim()) {
-          sessionIdRef.current = data.sessionId.trim();
+          const sessionId = data.sessionId.trim();
+          sessionIdRef.current = sessionId;
+          setActiveSessionId(sessionId);
+          setTopic('unknown');
+          setKeyNumbers([]);
+          setInsights([]);
         }
       }
     } catch {
       sessionIdRef.current = 'default';
+      setActiveSessionId('default');
     }
     start();
   }, [serverUrl, start]);
+
+  const handleClear = useCallback(() => {
+    clearLines();
+    sentLineCountRef.current = 0;
+    setTopic('unknown');
+    setKeyNumbers([]);
+    setInsights([]);
+    fetch(`${serverUrl}/transcript/reset`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sessionId: sessionIdRef.current }),
+    }).catch(() => {});
+  }, [clearLines, serverUrl]);
 
   useEffect(() => {
     if (lines.length < sentLineCountRef.current) {
@@ -68,6 +91,48 @@ export default function App() {
     }).catch(() => {});
   }, [interim, serverUrl]);
 
+  useEffect(() => {
+    if (!activeSessionId) return undefined;
+
+    let cancelled = false;
+    const fetchState = async () => {
+      try {
+        const response = await fetch(`${serverUrl}/session/${activeSessionId}/state`);
+        if (!response.ok) return;
+        const data = await response.json();
+        if (cancelled) return;
+        setTopic(typeof data?.topic === 'string' && data.topic.trim() ? data.topic.trim() : 'unknown');
+        setKeyNumbers(Array.isArray(data?.keyNumbers) ? data.keyNumbers : []);
+        setInsights(Array.isArray(data?.insights) ? data.insights.slice(-12) : []);
+      } catch {
+        // ignore transient network errors
+      }
+    };
+
+    fetchState();
+    const interval = setInterval(fetchState, 1500);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, [activeSessionId, serverUrl]);
+
+  const metrics = useMemo(() => {
+    const topicMetric = {
+      key: 'topic',
+      label: 'Detected Topic',
+      prev: topic,
+      current: topic,
+    };
+    const numberMetrics = keyNumbers.map((k, idx) => ({
+      key: `num-${idx}-${k.label}`,
+      label: k.label,
+      prev: k.value,
+      current: k.value,
+    }));
+    return [topicMetric, ...numberMetrics];
+  }, [keyNumbers, topic]);
+
   return (
     <div className="h-screen w-screen overflow-hidden bg-surface-900 flex flex-col">
       <header className="flex-shrink-0 flex items-center justify-between px-5 py-3 border-b border-white/5 bg-surface-800/50 backdrop-blur-sm">
@@ -92,15 +157,15 @@ export default function App() {
             listening={listening}
             onStart={handleStart}
             onStop={stop}
-            onClear={clearLines}
+            onClear={handleClear}
             lines={lines}
             interim={interim}
           />
         </div>
         <div className="flex-1 min-w-0">
           <AIAssistantPanel
-            insights={[]}
-            metrics={[]}
+            insights={insights}
+            metrics={metrics}
             actionItems={[]}
             isCallActive={listening}
             isPlaying={listening}
