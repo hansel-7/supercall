@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react';
 import { Phone } from 'lucide-react';
 import AIAssistantPanel from './components/AIAssistantPanel';
 import CallScreenMvp from './components/CallScreenMvp';
@@ -5,6 +6,46 @@ import { useSpeechRecognition } from './hooks/useSpeechRecognition';
 
 export default function App() {
   const { supported, listening, lines, interim, start, stop, clearLines } = useSpeechRecognition();
+  const sentLineCountRef = useRef(0);
+  const lastInterimRef = useRef('');
+  const serverUrl = import.meta.env.VITE_SERVER_URL || 'http://localhost:3001';
+
+  useEffect(() => {
+    if (lines.length < sentLineCountRef.current) {
+      sentLineCountRef.current = 0;
+    }
+    if (lines.length === sentLineCountRef.current) return;
+
+    const newLines = lines.slice(sentLineCountRef.current);
+    sentLineCountRef.current = lines.length;
+
+    newLines.forEach((line) => {
+      fetch(`${serverUrl}/transcript`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type: 'final',
+          text: line.text,
+          at: line.at,
+        }),
+      }).catch(() => {});
+    });
+  }, [lines, serverUrl]);
+
+  useEffect(() => {
+    if (!interim || interim === lastInterimRef.current) return;
+    lastInterimRef.current = interim;
+
+    fetch(`${serverUrl}/transcript`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        type: 'interim',
+        text: interim,
+        at: Date.now(),
+      }),
+    }).catch(() => {});
+  }, [interim, serverUrl]);
 
   return (
     <div className="h-screen w-screen overflow-hidden bg-surface-900 flex flex-col">
