@@ -27,6 +27,7 @@ export function useCallSimulation(getStepDuration) {
   const [isCallActive, setIsCallActive] = useState(false);
   const [actionItems, setActionItems] = useState([]);
   const [metrics, setMetrics] = useState(INITIAL_METRICS);
+  const [callStartTime, setCallStartTime] = useState(null);
 
   const timerRef = useRef(null);
   const insightTimerRef = useRef(null);
@@ -122,7 +123,10 @@ export function useCallSimulation(getStepDuration) {
   advanceStepRef.current = advanceStep;
 
   const play = useCallback(() => {
-    if (!isCallActive) setIsCallActive(true);
+    if (!isCallActive) {
+      setIsCallActive(true);
+      setCallStartTime(new Date());
+    }
     isPlayingRef.current = true;
     setIsPlaying(true);
     advanceStep();
@@ -151,6 +155,57 @@ export function useCallSimulation(getStepDuration) {
     setIsCallActive(false);
     setActionItems([]);
     setMetrics(INITIAL_METRICS);
+    setCallStartTime(null);
+  }, []);
+
+  // Instantly populate all state as if the full call just finished — used by "Skip to End".
+  const skipToEnd = useCallback(() => {
+    if (timerRef.current) { clearTimeout(timerRef.current); timerRef.current = null; }
+    if (insightTimerRef.current) { clearTimeout(insightTimerRef.current); insightTimerRef.current = null; }
+    if (metricsTimerRef.current) { clearTimeout(metricsTimerRef.current); metricsTimerRef.current = null; }
+
+    const fullTranscript = callScript.map((s) => ({ speaker: s.speaker, name: s.name, text: s.text }));
+
+    // Apply every metricUpdate in script order
+    const allMetrics = INITIAL_METRICS.map((m) => ({ ...m }));
+    callScript.forEach((step) => {
+      if (!step.metricUpdates) return;
+      Object.entries(step.metricUpdates).forEach(([key, value]) => {
+        const row = allMetrics.find((r) => r.key === key);
+        if (row) row.current = value;
+      });
+    });
+
+    // Collect all insights and action items
+    const allInsights = [];
+    const allActions = [];
+    callScript.forEach((step) => {
+      if (!step.triggers) return;
+      step.triggers.forEach((id) => {
+        const insight = insights[id];
+        if (!insight) return;
+        allInsights.push({ ...insight, timestamp: Date.now() });
+        if (id.startsWith('action-')) {
+          allActions.push({
+            id,
+            text: insight.title.replace('Action: ', ''),
+            detail: insight.body,
+            completed: false,
+          });
+        }
+      });
+    });
+
+    isPlayingRef.current = false;
+    setIsPlaying(false);
+    setIsCallActive(true);
+    setCallStartTime((prev) => prev ?? new Date());
+    setCurrentIndex(callScript.length - 1);
+    setCurrentSpeaker(null);
+    setTranscript(fullTranscript);
+    setMetrics(allMetrics);
+    setActiveInsights(allInsights);
+    setActionItems(allActions);
   }, []);
 
   useEffect(() => {
@@ -175,6 +230,7 @@ export function useCallSimulation(getStepDuration) {
     actionItems,
     metrics,
     callDuration,
+    callStartTime,
     isPlaying,
     isCallActive,
     isComplete,
@@ -182,5 +238,6 @@ export function useCallSimulation(getStepDuration) {
     play,
     pause,
     restart,
+    skipToEnd,
   };
 }

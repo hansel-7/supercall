@@ -9,6 +9,7 @@ import {
   RotateCcw,
   Monitor,
   Loader2,
+  SkipForward,
 } from 'lucide-react';
 import { useState } from 'react';
 
@@ -30,6 +31,7 @@ export default function CallControls({
   onPlay,
   onPause,
   onRestart,
+  onSkipToEnd,
 }) {
   const [isMuted, setIsMuted] = useState(false);
   const [isVideoOff, setIsVideoOff] = useState(false);
@@ -118,9 +120,19 @@ export default function CallControls({
             <button
               onClick={onRestart}
               className="p-2.5 rounded-full bg-white/5 text-gray-400 hover:bg-white/10 hover:text-white transition-colors"
+              title="Restart"
             >
               <RotateCcw className="w-4 h-4" />
             </button>
+            {onSkipToEnd && (
+              <button
+                onClick={onSkipToEnd}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-violet-600/80 hover:bg-violet-500 text-white text-xs font-medium transition-colors"
+                title="Skip to end"
+              >
+                <SkipForward className="w-3.5 h-3.5" /> Skip
+              </button>
+            )}
             <button className="p-2.5 rounded-full bg-red-600 text-white hover:bg-red-500 transition-colors">
               <PhoneOff className="w-4 h-4" />
             </button>

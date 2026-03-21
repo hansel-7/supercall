@@ -15,6 +15,7 @@ export default function CallScreen({
   onPlay,
   onPause,
   onRestart,
+  onSkipToEnd,
 }) {
   return (
     <div className="flex flex-col h-full gap-3">
@@ -58,6 +59,7 @@ export default function CallScreen({
           onPlay={onPlay}
           onPause={onPause}
           onRestart={onRestart}
+          onSkipToEnd={onSkipToEnd}
         />
       </div>
     </div>

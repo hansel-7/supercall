@@ -1,7 +1,8 @@
-import { useEffect, useRef, useCallback } from 'react';
+import { useEffect, useRef, useCallback, useState } from 'react';
 import { Phone, Brain, AlertCircle, RefreshCw } from 'lucide-react';
 import CallScreen from './components/CallScreen';
 import AIAssistantPanel from './components/AIAssistantPanel';
+import CallSummary from './components/CallSummary';
 import { useCallSimulation } from './hooks/useCallSimulation';
 import { useTTS } from './hooks/useTTS';
 
@@ -11,8 +12,11 @@ export default function App() {
   // Pass real audio durations into the simulation so it advances only when audio finishes
   const sim = useCallSimulation(tts.isReady ? tts.getDuration : null);
 
+  const [showSummary, setShowSummary] = useState(false);
+
   // Set when "Start Call" is clicked before TTS is ready — auto-starts once preload finishes
   const pendingStartRef = useRef(false);
+  const summaryTimerRef = useRef(null);
 
   // Auto-start the simulation the moment all audio is ready
   useEffect(() => {
@@ -39,6 +43,15 @@ export default function App() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sim.isPlaying]);
 
+  // Show summary screen shortly after the call finishes naturally
+  useEffect(() => {
+    if (sim.isComplete && sim.isCallActive) {
+      summaryTimerRef.current = setTimeout(() => setShowSummary(true), 1800);
+    }
+    return () => clearTimeout(summaryTimerRef.current);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sim.isComplete]);
+
   const handleStartCall = useCallback(() => {
     if (tts.isLoading) return;
     if (!tts.isReady) {
@@ -56,6 +69,14 @@ export default function App() {
   const handleRestart = useCallback(() => {
     tts.stopAll();
     sim.restart();
+    setShowSummary(false);
+  }, [tts, sim]);
+
+  const handleSkipToEnd = useCallback(() => {
+    clearTimeout(summaryTimerRef.current);
+    tts.stopAll();
+    sim.skipToEnd();
+    setShowSummary(true);
   }, [tts, sim]);
 
   // Duration of the currently-playing step (in ms) — used to sync word reveal speed
@@ -95,6 +116,7 @@ export default function App() {
             onPlay={handleStartCall}
             onPause={handlePause}
             onRestart={handleRestart}
+            onSkipToEnd={sim.isCallActive && !sim.isComplete ? handleSkipToEnd : undefined}
           />
         </div>
         <div className="flex-1 min-w-0">
@@ -143,6 +165,18 @@ export default function App() {
           </div>
         </div>
       )}
+
+      <CallSummary
+        isVisible={showSummary}
+        onClose={() => setShowSummary(false)}
+        onRestart={handleRestart}
+        metrics={sim.metrics}
+        insights={sim.activeInsights}
+        actionItems={sim.actionItems}
+        callDuration={sim.callDuration}
+        callStartTime={sim.callStartTime}
+        totalSteps={sim.totalSteps}
+      />
 
       {tts.error && (
         <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-3 bg-red-500/10 border border-red-500/30 text-red-300 rounded-xl px-4 py-3 z-50 max-w-md">
