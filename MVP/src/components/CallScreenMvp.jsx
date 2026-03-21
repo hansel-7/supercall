@@ -1,5 +1,4 @@
 import { Mic, MicOff, Trash2 } from 'lucide-react';
-import CallerTile from './CallerTile';
 import LiveTranscriptStream from './LiveTranscriptStream';
 
 export default function CallScreenMvp({
@@ -13,21 +12,25 @@ export default function CallScreenMvp({
 }) {
   return (
     <div className="flex flex-col h-full gap-3">
-      <div className="grid grid-cols-2 gap-3 flex-shrink-0">
-        <CallerTile
-          name="Speaker A"
-          role="Participant"
-          company="Live"
-          speaker="vc"
-          isSpeaking={false}
-        />
-        <CallerTile
-          name="Speaker B"
-          role="Participant"
-          company="Live"
-          speaker="founder"
-          isSpeaking={false}
-        />
+      <div className="flex-shrink-0 bg-surface-700/60 backdrop-blur-sm border border-white/5 rounded-2xl p-6 min-h-[280px] flex items-center justify-center">
+        {!listening ? (
+          <button
+            type="button"
+            onClick={onStart}
+            disabled={!supported}
+            className="inline-flex items-center gap-2 px-5 py-3 rounded-full bg-green-600 hover:bg-green-500 disabled:opacity-40 text-white text-sm font-medium"
+          >
+            <Mic className="w-4 h-4" /> Start Listening
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={onStop}
+            className="inline-flex items-center gap-2 px-5 py-3 rounded-full bg-red-600 hover:bg-red-500 text-white text-sm font-medium"
+          >
+            <MicOff className="w-4 h-4" /> Stop Listening
+          </button>
+        )}
       </div>
 
       <div className="flex-1 min-h-0 bg-surface-800/40 rounded-xl border border-white/5 p-4">
@@ -36,24 +39,6 @@ export default function CallScreenMvp({
             <div className="w-1.5 h-1.5 rounded-full bg-accent-blue" />
             <span className="text-xs font-medium text-gray-400 uppercase tracking-wider">Live Transcript</span>
           </div>
-          {!listening ? (
-            <button
-              type="button"
-              onClick={onStart}
-              disabled={!supported}
-              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-full bg-green-600 hover:bg-green-500 disabled:opacity-40 text-white text-xs font-medium"
-            >
-              <Mic className="w-3.5 h-3.5" /> Start
-            </button>
-          ) : (
-            <button
-              type="button"
-              onClick={onStop}
-              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-full bg-red-600 hover:bg-red-500 text-white text-xs font-medium"
-            >
-              <MicOff className="w-3.5 h-3.5" /> Stop
-            </button>
-          )}
         </div>
         <div className="h-[calc(100%-2rem)] overflow-hidden">
           <LiveTranscriptStream lines={lines} interim={interim} />
