@@ -9,6 +9,8 @@ export default function CallScreen({
   isPlaying,
   isCallActive,
   isComplete,
+  currentIndex,
+  ttsLoading,
   onPlay,
   onPause,
   onRestart,
@@ -50,6 +52,8 @@ export default function CallScreen({
           isPlaying={isPlaying}
           isCallActive={isCallActive}
           isComplete={isComplete}
+          currentIndex={currentIndex}
+          ttsLoading={ttsLoading}
           onPlay={onPlay}
           onPause={onPause}
           onRestart={onRestart}

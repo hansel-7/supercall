@@ -8,6 +8,7 @@ import {
   Pause,
   RotateCcw,
   Monitor,
+  Loader2,
 } from 'lucide-react';
 import { useState } from 'react';
 
@@ -24,6 +25,8 @@ export default function CallControls({
   isPlaying,
   isCallActive,
   isComplete,
+  currentIndex,
+  ttsLoading,
   onPlay,
   onPause,
   onRestart,
@@ -31,12 +34,20 @@ export default function CallControls({
   const [isMuted, setIsMuted] = useState(false);
   const [isVideoOff, setIsVideoOff] = useState(false);
 
+  const turnNumber = currentIndex >= 0 ? currentIndex + 1 : 0;
+
   return (
     <div className="flex items-center justify-between px-4 py-3 bg-surface-800/80 backdrop-blur-sm rounded-xl border border-white/5">
       <div className="flex items-center gap-3">
         <div className="flex items-center gap-1.5">
           <div
-            className={`w-2 h-2 rounded-full ${isPlaying ? 'bg-red-500 animate-pulse' : isCallActive ? 'bg-yellow-500' : 'bg-gray-500'}`}
+            className={`w-2 h-2 rounded-full ${
+              isPlaying
+                ? 'bg-red-500 animate-pulse'
+                : isCallActive
+                  ? 'bg-yellow-500'
+                  : 'bg-gray-500'
+            }`}
           />
           <span className="text-xs font-mono text-gray-400">
             {isCallActive ? formatDuration(callDuration) : '00:00'}
@@ -52,13 +63,21 @@ export default function CallControls({
       <div className="flex items-center gap-2">
         <button
           onClick={() => setIsMuted(!isMuted)}
-          className={`p-2.5 rounded-full transition-colors ${isMuted ? 'bg-red-500/20 text-red-400' : 'bg-white/5 text-gray-400 hover:bg-white/10 hover:text-white'}`}
+          className={`p-2.5 rounded-full transition-colors ${
+            isMuted
+              ? 'bg-red-500/20 text-red-400'
+              : 'bg-white/5 text-gray-400 hover:bg-white/10 hover:text-white'
+          }`}
         >
           {isMuted ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
         </button>
         <button
           onClick={() => setIsVideoOff(!isVideoOff)}
-          className={`p-2.5 rounded-full transition-colors ${isVideoOff ? 'bg-red-500/20 text-red-400' : 'bg-white/5 text-gray-400 hover:bg-white/10 hover:text-white'}`}
+          className={`p-2.5 rounded-full transition-colors ${
+            isVideoOff
+              ? 'bg-red-500/20 text-red-400'
+              : 'bg-white/5 text-gray-400 hover:bg-white/10 hover:text-white'
+          }`}
         >
           {isVideoOff ? <VideoOff className="w-4 h-4" /> : <Video className="w-4 h-4" />}
         </button>
@@ -71,9 +90,14 @@ export default function CallControls({
         {!isCallActive || isComplete ? (
           <button
             onClick={isComplete ? onRestart : onPlay}
-            className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-500 text-white rounded-full text-sm font-medium transition-colors"
+            disabled={ttsLoading}
+            className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-500 disabled:opacity-60 disabled:cursor-not-allowed text-white rounded-full text-sm font-medium transition-colors"
           >
-            {isComplete ? (
+            {ttsLoading ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" /> Preparing...
+              </>
+            ) : isComplete ? (
               <>
                 <RotateCcw className="w-4 h-4" /> Restart
               </>
@@ -106,9 +130,7 @@ export default function CallControls({
 
       <div className="text-xs text-gray-500 hidden sm:block">
         {isCallActive && !isComplete && (
-          <span className="font-mono">
-            Turn {Math.min(30, Math.max(0, Math.floor(callDuration / 3.5) + 1))}/30
-          </span>
+          <span className="font-mono">{turnNumber}/30</span>
         )}
       </div>
     </div>
