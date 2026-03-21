@@ -4,6 +4,7 @@ export const insights = {
     type: 'context',
     title: 'Previous Call — Feb 28',
     body: 'Last call: 3 weeks ago. You flagged strong interest in the regulatory moat and requested updated financials. Alex completed all 4 action items on time — good execution signal.',
+    highlight: ['strong interest', 'regulatory moat', 'good execution signal'],
     priority: 1,
   },
   'context-arr-prev': {
@@ -11,6 +12,7 @@ export const insights = {
     type: 'context',
     title: 'ARR Baseline: $1.8M',
     body: 'ARR stood at $1.8M last call, growing at 15% MoM at the time. You asked for a specific update on growth trajectory this session.',
+    highlight: ['growth trajectory'],
     priority: 2,
   },
   'metric-arr-current': {
@@ -46,6 +48,7 @@ export const insights = {
     type: 'alert',
     title: 'Burn Rate — Partner Meeting Flag',
     body: 'Your partner meeting flagged burn rate as a diligence concern. Burn was $280K last call. Press for a specific link between increased spend and revenue-generating output.',
+    highlight: ['diligence concern', 'specific link', 'revenue-generating output'],
     priority: 1,
   },
   'metric-burn-rate': {
@@ -74,6 +77,7 @@ export const insights = {
     type: 'alert',
     title: 'FinFlow — Competitive Diligence Flag',
     body: 'Your team has been tracking FinFlow in the market. Probe whether the B2B compliance moat is genuinely defensible or a time-bound lead. 18 months is a claim — stress-test it.',
+    highlight: ['genuinely defensible', 'time-bound lead', 'stress-test it'],
     priority: 1,
   },
   'suggestion-moat-detail': {
@@ -102,6 +106,7 @@ export const insights = {
     type: 'context',
     title: 'NRR Benchmark — Top Quartile',
     body: 'Top-quartile Series A fintech NRR sits at 115–125%. At 127%, NovaPay is above benchmark. Dig into what\'s actually driving expansion — product-led or sales-led upsell?',
+    highlight: ['above benchmark', 'product-led', 'sales-led upsell'],
     priority: 2,
   },
   'suggestion-analytics-highlight': {
@@ -109,6 +114,7 @@ export const insights = {
     type: 'suggestion',
     title: 'Analytics Add-on — Strong Signal',
     body: '40% enterprise adoption in the first month is above typical add-on benchmarks. Clarify the pricing model — is this incremental ARR or bundled? It matters for the revenue quality story.',
+    highlight: ['above typical add-on benchmarks', 'revenue quality story'],
     priority: 2,
   },
   'context-vpe-search': {
@@ -116,6 +122,7 @@ export const insights = {
     type: 'context',
     title: 'VP Engineering — Open Action Item',
     body: 'Last call: Alex was actively searching for a VP of Engineering. You flagged this as a key execution risk. Listen for whether they\'ve closed the role and who they hired.',
+    highlight: ['key execution risk'],
     priority: 2,
   },
   'metric-key-hire': {
@@ -130,6 +137,7 @@ export const insights = {
     type: 'suggestion',
     title: 'David Park — De-risks Execution',
     body: 'Ex-Stripe infrastructure lead is a strong hire. This directly addresses the technical execution risk you flagged last call. Note for the IC deck — it\'s a credibility signal.',
+    highlight: ['directly addresses', 'technical execution risk', 'credibility signal'],
     priority: 2,
   },
   'alert-valuation-discussion': {
@@ -137,6 +145,7 @@ export const insights = {
     type: 'alert',
     title: 'Valuation Discussion — Anchor Point',
     body: 'You previously discussed a $25–30M range. Listen for where Alex anchors. The IC will scrutinize the multiple — have your comparable set ready before responding.',
+    highlight: ['IC will scrutinize', 'comparable set'],
     priority: 1,
   },
   'metric-valuation': {
@@ -151,6 +160,7 @@ export const insights = {
     type: 'context',
     title: 'Valuation — $25–30M Discussed Last Call',
     body: 'Alex has anchored at $30M pre-money — the top of the range you discussed. 12.5x forward ARR is above the fintech median. Validate his forward revenue assumptions carefully.',
+    highlight: ['top of the range', 'above the fintech median', 'forward revenue assumptions'],
     priority: 2,
   },
   'alert-valuation-pushback': {
@@ -158,6 +168,7 @@ export const insights = {
     type: 'alert',
     title: 'Multiple Above Fintech Median',
     body: 'You signaled 12.5x is "higher end." This will be an IC focus point. Push Alex to substantiate forward projections with concrete evidence, not assumptions.',
+    highlight: ['IC focus point', 'concrete evidence, not assumptions'],
     priority: 1,
   },
   'metric-pipeline': {
@@ -172,6 +183,7 @@ export const insights = {
     type: 'suggestion',
     title: 'Fortune 500 LOIs — Probe the Details',
     body: 'Three Fortune 500 LOIs is a strong signal, but LOIs aren\'t contracts. Push on conversion timeline, expected ACV, and whether any of these can be referenced for the IC.',
+    highlight: ['LOIs aren\'t contracts', 'referenced for the IC'],
     priority: 1,
   },
   'metric-enterprise-pipeline': {
@@ -193,6 +205,7 @@ export const insights = {
     type: 'alert',
     title: 'IC Presentation — Next Tuesday',
     body: 'You\'re presenting NovaPay to the IC next Tuesday. Request the materials you need now — financial model, enterprise case studies, and competitive analysis. Turnaround time is tight.',
+    highlight: ['Turnaround time is tight'],
     priority: 1,
   },
   'action-financial-model': {
@@ -200,6 +213,7 @@ export const insights = {
     type: 'alert',
     title: 'Action Item: Updated Financial Model',
     body: 'Alex to send updated financial model with Q2 actuals. Needed before Tuesday IC. Confirm Monday delivery.',
+    highlight: ['Confirm Monday delivery'],
     priority: 1,
   },
   'action-case-studies': {
@@ -207,6 +221,7 @@ export const insights = {
     type: 'alert',
     title: 'Action Item: Enterprise Case Studies',
     body: 'Alex to prepare enterprise customer case studies. Focus on compliance ROI and quantifiable outcomes — most compelling for IC.',
+    highlight: ['compliance ROI', 'quantifiable outcomes'],
     priority: 1,
   },
   'action-competitive-memo': {
@@ -214,6 +229,7 @@ export const insights = {
     type: 'alert',
     title: 'Action Item: Competitive Moat One-Pager',
     body: 'Alex to deliver one-page competitive analysis. Should quantify the 18-month build barrier and address FinFlow directly.',
+    highlight: ['18-month build barrier'],
     priority: 1,
   },
   'action-send-materials': {
@@ -221,6 +237,7 @@ export const insights = {
     type: 'suggestion',
     title: 'Materials Committed — Monday Delivery',
     body: 'Alex committed to Monday morning delivery for all three IC materials. Follow up Monday afternoon if not received — IC is Tuesday.',
+    highlight: ['Follow up Monday afternoon'],
     priority: 1,
   },
 
@@ -231,6 +248,7 @@ export const insights = {
     type: 'vc_question',
     title: 'Strong ARR growth — dig into the win profile',
     body: 'Good news. Revenue jumped 33% to $2.4M, driven by 2 new enterprise contracts. Ask about who these customers are and whether the win is repeatable — industry, use case, sales motion.',
+    highlight: ['repeatable', 'industry, use case, sales motion'],
     priority: 1,
   },
   'vcq-rev-mix': {
@@ -238,6 +256,7 @@ export const insights = {
     type: 'vc_question',
     title: 'Enterprise shift is a quality signal — confirm the strategy',
     body: 'Positive. Enterprise is now 60% of revenue and ACV jumped from $45K to $72K — strong pricing leverage. Ask whether this shift is intentional and what it means for the SMB motion going forward.',
+    highlight: ['strong pricing leverage', 'intentional', 'SMB motion'],
     priority: 1,
   },
   'vcq-burn': {
@@ -245,6 +264,7 @@ export const insights = {
     type: 'vc_question',
     title: 'Burn increase explained — press for a payoff timeline',
     body: 'Reasonable. The $30K increase is tied to 3 deliberate engineering hires. Ask when specifically these hires will start contributing to enterprise revenue — get a concrete 6-month view.',
+    highlight: ['deliberate', 'concrete 6-month view'],
     priority: 1,
   },
   'vcq-runway': {
@@ -252,6 +272,7 @@ export const insights = {
     type: 'vc_question',
     title: '14 months is manageable but tight — probe the contingency',
     body: 'Watch this. 14 months leaves limited buffer if the raise takes longer than expected. Ask what milestones they\'d prioritize and what they\'d cut if the Series A slips by 6 months.',
+    highlight: ['limited buffer', 'what they\'d cut'],
     priority: 1,
   },
   'vcq-moat': {
@@ -259,6 +280,7 @@ export const insights = {
     type: 'vc_question',
     title: 'Compliance moat claimed — stress-test the defensibility',
     body: 'The 18-month build is the core differentiation argument. Ask how long and how much it would realistically cost a well-funded competitor to replicate the 12 regulatory integrations from scratch.',
+    highlight: ['core differentiation argument', 'well-funded competitor', 'from scratch'],
     priority: 1,
   },
   'vcq-retention': {
@@ -266,6 +288,7 @@ export const insights = {
     type: 'vc_question',
     title: 'NRR strong, enterprise churn zero — understand the SMB gap',
     body: 'Very strong retention signal. 127% NRR and zero enterprise churn are IC-grade numbers. Ask what\'s specifically driving SMB churn — and whether the plan is to fix it or lean fully into enterprise.',
+    highlight: ['IC-grade numbers', 'driving SMB churn', 'lean fully into enterprise'],
     priority: 1,
   },
   'vcq-upsell': {
@@ -273,6 +296,7 @@ export const insights = {
     type: 'vc_question',
     title: '40% add-on adoption is exceptional — quantify the economics',
     body: 'Two compounding upsell engines is a great story. Ask for the average incremental ACV per enterprise expansion, whether the analytics add-on is priced separately, and the NRR target for next year.',
+    highlight: ['compounding upsell engines', 'priced separately'],
     priority: 1,
   },
   'vcq-vpe': {
@@ -280,6 +304,7 @@ export const insights = {
     type: 'vc_question',
     title: 'Stripe hire de-risks execution — get the 90-day mandate',
     body: 'This directly addresses the exec risk you flagged last call. Ask what David owns in his first 90 days, what he\'ll ship, and how the equity is structured relative to the round dilution.',
+    highlight: ['exec risk', 'first 90 days', 'round dilution'],
     priority: 1,
   },
   'vcq-valuation': {
@@ -287,6 +312,7 @@ export const insights = {
     type: 'vc_question',
     title: '12.5x forward ARR — validate the projection assumptions',
     body: 'He\'s anchored at the top of your previously discussed range. Ask him to walk through the forward ARR model — specifically the growth rate assumed and which customers underpin the number.',
+    highlight: ['top of your previously discussed range', 'growth rate assumed', 'underpin the number'],
     priority: 1,
   },
   'vcq-pipeline': {
@@ -294,6 +320,7 @@ export const insights = {
     type: 'vc_question',
     title: 'LOIs are promising — test confidence in the 90-day close',
     body: '$1.2M in signed pipeline and 3 Fortune 500 LOIs sounds strong, but LOIs aren\'t contracts. Ask for the historical LOI-to-close rate and how confident they are in that specific 90-day conversion window.',
+    highlight: ['LOIs aren\'t contracts', 'LOI-to-close rate', '90-day conversion window'],
     priority: 1,
   },
   'vcq-bank': {
@@ -301,6 +328,7 @@ export const insights = {
     type: 'vc_question',
     title: 'Top-5 bank is a landmark deal — understand the close risk',
     body: 'This would be a flagship win timed with the fundraise. Ask for the expected ACV and the single biggest risk to vendor approval sign-off next month — you want to know what could delay it.',
+    highlight: ['flagship win', 'single biggest risk', 'what could delay it'],
     priority: 1,
   },
   'vcq-funds': {
@@ -308,6 +336,7 @@ export const insights = {
     type: 'vc_question',
     title: 'Allocation is sensible — press on sales productivity',
     body: 'Engineering-heavy is the right call for this stage. Ask about ramp time and quota targets for the 8 enterprise reps — and when the expanded sales team is expected to be net revenue positive.',
+    highlight: ['ramp time', 'quota targets', 'net revenue positive'],
     priority: 1,
   },
   'vcq-ic-risk': {
@@ -315,6 +344,7 @@ export const insights = {
     type: 'vc_question',
     title: 'Good instinct offering materials — align on IC pressure points',
     body: 'Fast turnaround offer is a strong execution signal. Ask what he thinks the IC\'s sharpest question will be — you want to make sure you\'re both aligned on how to address it before Tuesday.',
+    highlight: ['strong execution signal', 'sharpest question', 'both aligned'],
     priority: 1,
   },
 };

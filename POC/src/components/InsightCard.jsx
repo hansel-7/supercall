@@ -7,6 +7,7 @@ const typeConfig = {
     border: 'border-blue-500/30',
     iconColor: 'text-blue-400',
     badge: 'bg-blue-500/20 text-blue-300',
+    highlightColor: 'text-blue-300 font-semibold',
     label: 'Metric',
   },
   alert: {
@@ -15,6 +16,7 @@ const typeConfig = {
     border: 'border-amber-500/30',
     iconColor: 'text-amber-400',
     badge: 'bg-amber-500/20 text-amber-300',
+    highlightColor: 'text-amber-300 font-semibold',
     label: 'Alert',
   },
   suggestion: {
@@ -23,6 +25,7 @@ const typeConfig = {
     border: 'border-green-500/30',
     iconColor: 'text-green-400',
     badge: 'bg-green-500/20 text-green-300',
+    highlightColor: 'text-green-300 font-semibold',
     label: 'Suggestion',
   },
   context: {
@@ -31,6 +34,7 @@ const typeConfig = {
     border: 'border-purple-500/30',
     iconColor: 'text-purple-400',
     badge: 'bg-purple-500/20 text-purple-300',
+    highlightColor: 'text-purple-300 font-semibold',
     label: 'Context',
   },
   vc_question: {
@@ -39,9 +43,24 @@ const typeConfig = {
     border: 'border-cyan-400/40',
     iconColor: 'text-cyan-400',
     badge: 'bg-cyan-500/25 text-cyan-300',
+    highlightColor: 'text-cyan-300 font-semibold',
     label: 'Follow-up Q',
   },
 };
+
+function renderBody(text, phrases, highlightClass) {
+  if (!phrases || phrases.length === 0) return text;
+  const sorted = [...phrases].sort((a, b) => b.length - a.length);
+  const escaped = sorted.map((p) => p.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+  const regex = new RegExp(`(${escaped.join('|')})`, 'gi');
+  const parts = text.split(regex);
+  return parts.map((part, i) => {
+    const isMatch = sorted.some((p) => p.toLowerCase() === part.toLowerCase());
+    return isMatch
+      ? <span key={i} className={highlightClass}>{part}</span>
+      : part;
+  });
+}
 
 export default function InsightCard({ insight }) {
   const config = typeConfig[insight.type] || typeConfig.context;
@@ -60,7 +79,9 @@ export default function InsightCard({ insight }) {
               {config.label}
             </span>
           </div>
-          <p className="text-xs text-gray-400 leading-relaxed">{insight.body}</p>
+          <p className="text-xs text-gray-400 leading-relaxed">
+            {renderBody(insight.body, insight.highlight, config.highlightColor)}
+          </p>
         </div>
       </div>
     </div>
