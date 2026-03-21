@@ -320,7 +320,7 @@ function deriveTopicHeuristic(text) {
     .join(' ');
 }
 
-function runAnalysisNow(sessionId) {
+function runMetricAnalysisNow(sessionId) {
   const session = getSession(sessionId);
   const latestText = session.pendingLatestText?.trim();
   if (!latestText || session.analysisInFlight) return;
@@ -419,14 +419,14 @@ function scheduleAnalysis(sessionId, chunkType) {
   const waitMs = Math.max(cooldownWait, debounceWait);
 
   if (waitMs === 0) {
-    runAnalysisNow(sessionId);
+    runMetricAnalysisNow(sessionId);
     return;
   }
 
   session.analysisTimer = setTimeout(() => {
     const s = getSession(sessionId);
     s.analysisTimer = null;
-    runAnalysisNow(sessionId);
+    runMetricAnalysisNow(sessionId);
   }, waitMs);
 }
 
