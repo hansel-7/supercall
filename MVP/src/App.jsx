@@ -1,29 +1,10 @@
-import { useCallback, useState } from 'react';
 import { Phone } from 'lucide-react';
-import LiveSttView from './components/LiveSttView';
-import { useAudioRecorder } from './hooks/useAudioRecorder';
+import AIAssistantPanel from './components/AIAssistantPanel';
+import CallScreenMvp from './components/CallScreenMvp';
 import { useSpeechRecognition } from './hooks/useSpeechRecognition';
 
 export default function App() {
-  const [recordError, setRecordError] = useState(null);
   const { supported, listening, lines, interim, start, stop, clearLines } = useSpeechRecognition();
-  const { start: startRecorder, stop: stopRecorder } = useAudioRecorder();
-
-  const handleStart = useCallback(async () => {
-    setRecordError(null);
-    try {
-      await startRecorder();
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      setRecordError(`Could not start recording: ${msg}`);
-    }
-    start();
-  }, [startRecorder, start]);
-
-  const handleStop = useCallback(() => {
-    stop();
-    stopRecorder();
-  }, [stop, stopRecorder]);
 
   return (
     <div className="h-screen w-screen overflow-hidden bg-surface-900 flex flex-col">
@@ -35,21 +16,32 @@ export default function App() {
           <span className="text-sm font-semibold text-white tracking-tight">SuperCall</span>
           <span className="text-[10px] bg-white/10 text-gray-400 px-2 py-0.5 rounded-full font-medium">MVP</span>
         </div>
-        <p className="text-[11px] text-gray-500 hidden sm:block">Live speech-to-text · auto-save audio</p>
+        <div className="flex items-center gap-3 text-xs text-gray-500">
+          <span>Live Meeting</span>
+          <span className="text-gray-700">|</span>
+          <span>Realtime Captions</span>
+        </div>
       </header>
 
-      <main className="flex-1 min-h-0 p-3">
-        <div className="h-full max-w-3xl mx-auto">
-          <LiveSttView
+      <main className="flex-1 min-h-0 flex gap-3 p-3">
+        <div className="w-[55%] flex-shrink-0">
+          <CallScreenMvp
             supported={supported}
             listening={listening}
-            onStart={handleStart}
-            onStop={handleStop}
+            onStart={start}
+            onStop={stop}
             onClear={clearLines}
             lines={lines}
             interim={interim}
-            recordError={recordError}
-            onDismissRecordError={() => setRecordError(null)}
+          />
+        </div>
+        <div className="flex-1 min-w-0">
+          <AIAssistantPanel
+            insights={[]}
+            metrics={[]}
+            actionItems={[]}
+            isCallActive={listening}
+            isPlaying={listening}
           />
         </div>
       </main>
