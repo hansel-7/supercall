@@ -5,10 +5,17 @@ import { Sparkles } from 'lucide-react';
 
 export default function InsightFeed({ insights }) {
   const scrollRef = useRef(null);
+  const lastSeenInsightRef = useRef('');
 
   useEffect(() => {
-    if (scrollRef.current) {
+    const newest = insights.length > 0 ? insights[insights.length - 1] : null;
+    const newestKey = newest
+      ? `${String(newest.metricKey || newest.id || '')}:${String(newest.updatedAt || '')}`
+      : '';
+    const hasNewInsight = newestKey && newestKey !== lastSeenInsightRef.current;
+    if (hasNewInsight && scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+      lastSeenInsightRef.current = newestKey;
     }
   }, [insights]);
 
