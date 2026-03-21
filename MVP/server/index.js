@@ -29,7 +29,7 @@ app.get('/health', (_req, res) => {
   res.json({ ok: true });
 });
 
-async function extractNumbersWithOpenAI(text) {
+async function extractKeyMetrics(text) {
   if (!OPENAI_API_KEY) {
     throw new Error('OPENAI_API_KEY is not set');
   }
@@ -86,7 +86,7 @@ app.post('/transcript', (req, res) => {
 
   const ts = at ? new Date(at).toISOString() : new Date().toISOString();
   console.log(`[${ts}] [${type || 'chunk'}] ${text}`);
-  extractNumbersWithOpenAI(text)
+  extractKeyMetrics(text)
     .then((numbers) => {
       console.log(`[${ts}] [numbers] ${numbers.length ? numbers.join(', ') : '(none)'}`);
     })
