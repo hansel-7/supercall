@@ -42,6 +42,7 @@ app.post('/session', (_req, res) => {
     topic: 'unknown',
     keyNumbers: [],
     insights: [],
+    lastInsightSignature: '',
     analysisInFlight: false,
     analysisTimer: null,
     lastAnalyzedAt: 0,
@@ -70,6 +71,7 @@ function getSession(sessionId) {
       topic: 'unknown',
       keyNumbers: [],
       insights: [],
+      lastInsightSignature: '',
       analysisInFlight: false,
       analysisTimer: null,
       lastAnalyzedAt: 0,
@@ -86,6 +88,44 @@ function appendLine(sessionId, line) {
     session.lines.splice(0, session.lines.length - MAX_CONTEXT_LINES);
   }
   return session;
+}
+
+function normalizeMetricLabel(label) {
+  const raw = String(label || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+
+  if (!raw) return '';
+
+  const compact = raw.replace(/\s+/g, ' ').trim();
+
+  if (compact.includes('down payment')) return 'down payment';
+  if (compact.includes('monthly payment')) return 'monthly payment';
+
+  return compact
+    .replace(/\b(initial|proposed|option|options|amount|starts|start|at)\b/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function formatMetricLabel(normalizedLabel, fallbackLabel) {
+  if (!normalizedLabel) return String(fallbackLabel || '').trim();
+  if (normalizedLabel === 'down payment') return 'Down payment';
+  if (normalizedLabel === 'monthly payment') return 'Monthly payment';
+  return normalizedLabel
+    .split(' ')
+    .filter(Boolean)
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(' ');
+}
+
+function normalizeMetricValue(value) {
+  const raw = String(value || '').trim();
+  if (!raw) return '';
+  const numeric = raw.replace(/[, ]+/g, '');
+  if (/^-?\d+(\.\d+)?$/.test(numeric)) return numeric;
+  return raw.toLowerCase();
 }
 
 async function analyzeWithContext({ sessionId, latestText }) {
@@ -228,25 +268,56 @@ function runAnalysisNow(sessionId) {
       s.topic = topic;
 
       if (Array.isArray(keyNumbers) && keyNumbers.length > 0) {
-        const mergedByLabel = new Map((s.keyNumbers || []).map((k) => [k.label.toLowerCase(), k]));
+        const mergedByLabel = new Map(
+          (s.keyNumbers || []).map((k) => [normalizeMetricLabel(k.label), k])
+        );
+        const changedNumbers = [];
+
         keyNumbers.forEach((k) => {
-          mergedByLabel.set(k.label.toLowerCase(), {
-            label: k.label,
-            value: k.value,
+          const normalizedLabel = normalizeMetricLabel(k.label);
+          if (!normalizedLabel) return;
+
+          const existing = mergedByLabel.get(normalizedLabel);
+          const nextValue = String(k.value || '').trim();
+          if (!nextValue) return;
+
+          const normalizedNextValue = normalizeMetricValue(nextValue);
+          const normalizedExistingValue = normalizeMetricValue(existing?.value);
+          if (existing && normalizedExistingValue === normalizedNextValue) {
+            return;
+          }
+
+          const nextMetric = {
+            label: formatMetricLabel(normalizedLabel, existing?.label || k.label),
+            value: nextValue,
             updatedAt: Date.now(),
-          });
+          };
+          mergedByLabel.set(normalizedLabel, nextMetric);
+          changedNumbers.push(nextMetric);
         });
+
         s.keyNumbers = Array.from(mergedByLabel.values());
-        s.insights = [
-          ...(s.insights || []).slice(-24),
-          {
-            id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-            type: 'metric',
-            title: `Topic: ${topic}`,
-            body: keyNumbers.map((k) => `${k.label}: ${k.value}`).join(' · '),
-            highlight: keyNumbers.map((k) => k.value),
-          },
-        ];
+
+        if (changedNumbers.length > 0) {
+          const insightSignature = changedNumbers
+            .map((k) => `${normalizeMetricLabel(k.label)}=${k.value}`)
+            .sort()
+            .join('|');
+
+          if (insightSignature !== s.lastInsightSignature) {
+            s.lastInsightSignature = insightSignature;
+            s.insights = [
+              ...(s.insights || []).slice(-24),
+              {
+                id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+                type: 'metric',
+                title: 'Key numbers update',
+                body: changedNumbers.map((k) => `${k.label}: ${k.value}`).join(' · '),
+                highlight: changedNumbers.map((k) => k.value),
+              },
+            ];
+          }
+        }
       }
 
       console.log(`[${ts}] [${sessionId}] [topic] ${topic}`);

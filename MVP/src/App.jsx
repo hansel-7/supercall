@@ -118,20 +118,21 @@ export default function App() {
   }, [activeSessionId, serverUrl]);
 
   const metrics = useMemo(() => {
-    const topicMetric = {
-      key: 'topic',
-      label: 'Detected Topic',
-      prev: topic,
-      current: topic,
-    };
-    const numberMetrics = keyNumbers.map((k, idx) => ({
-      key: `num-${idx}-${k.label}`,
-      label: k.label,
-      prev: k.value,
-      current: k.value,
-    }));
-    return [topicMetric, ...numberMetrics];
-  }, [keyNumbers, topic]);
+    const byLabel = new Map();
+    keyNumbers.forEach((k) => {
+      const normalizedLabel = String(k?.label || '')
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, ' ')
+        .trim();
+      if (!normalizedLabel) return;
+      byLabel.set(normalizedLabel, {
+        key: `num-${normalizedLabel}`,
+        label: String(k.label || '').trim(),
+        current: String(k.value || '').trim(),
+      });
+    });
+    return Array.from(byLabel.values()).filter((m) => m.current);
+  }, [keyNumbers]);
 
   return (
     <div className="h-screen w-screen overflow-hidden bg-surface-900 flex flex-col">
