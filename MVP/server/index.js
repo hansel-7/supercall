@@ -50,9 +50,21 @@ app.post('/session', (_req, res) => {
     metricUpdates: [],
     insights: [],
     analysisInFlight: false,
+    insightAnalysisInFlight: false,
     analysisTimer: null,
     lastAnalyzedAt: 0,
+    lastInsightAnalyzedAt: 0,
     pendingLatestText: '',
+    pendingInsightLatestText: '',
+    insightMemory: {
+      lastTopic: 'unknown',
+      facts: [],
+      intentions: [],
+      results: [],
+      risks: [],
+      obstacles: [],
+      nextSteps: [],
+    },
   });
   res.json({ ok: true, sessionId });
 });
@@ -80,9 +92,21 @@ function getSession(sessionId) {
       metricUpdates: [],
       insights: [],
       analysisInFlight: false,
+      insightAnalysisInFlight: false,
       analysisTimer: null,
       lastAnalyzedAt: 0,
+      lastInsightAnalyzedAt: 0,
       pendingLatestText: '',
+      pendingInsightLatestText: '',
+      insightMemory: {
+        lastTopic: 'unknown',
+        facts: [],
+        intentions: [],
+        results: [],
+        risks: [],
+        obstacles: [],
+        nextSteps: [],
+      },
     });
   }
   return sessionStore.get(sessionId);
@@ -188,6 +212,92 @@ function upsertMetricInsight(session, metric) {
     insights.push(nextInsight);
   }
 
+  insights.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+  session.insights = insights.slice(0, 24);
+}
+
+function normalizeInsightKey(value) {
+  return String(value || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim()
+    .replace(/\s+/g, '-')
+    .slice(0, 64);
+}
+
+function mapInsightCategoryToType(category) {
+  const c = String(category || '').toLowerCase();
+  if (c === 'risk' || c === 'obstacle') return 'alert';
+  if (c === 'intention' || c === 'next_step') return 'suggestion';
+  return 'context';
+}
+
+function mapCategoryToMemoryKey(category) {
+  const c = String(category || '').toLowerCase();
+  if (c === 'fact') return 'facts';
+  if (c === 'intention') return 'intentions';
+  if (c === 'result') return 'results';
+  if (c === 'risk') return 'risks';
+  if (c === 'obstacle') return 'obstacles';
+  return 'nextSteps';
+}
+
+function mergeInsightMemory(session, topic, insightItems) {
+  const memory = session.insightMemory || {
+    lastTopic: 'unknown',
+    facts: [],
+    intentions: [],
+    results: [],
+    risks: [],
+    obstacles: [],
+    nextSteps: [],
+  };
+  memory.lastTopic = String(topic || memory.lastTopic || 'unknown');
+
+  insightItems.forEach((insight) => {
+    const key = mapCategoryToMemoryKey(insight.category);
+    const list = Array.isArray(memory[key]) ? memory[key] : [];
+    const candidate = {
+      title: insight.title,
+      body: insight.body,
+      updatedAt: Date.now(),
+    };
+    const sig = `${normalizeInsightKey(candidate.title)}:${normalizeInsightKey(candidate.body)}`;
+    const existingIndex = list.findIndex((item) => {
+      const itemSig = `${normalizeInsightKey(item?.title)}:${normalizeInsightKey(item?.body)}`;
+      return itemSig === sig;
+    });
+    if (existingIndex >= 0) list[existingIndex] = candidate;
+    else list.push(candidate);
+    memory[key] = list.slice(-20);
+  });
+
+  session.insightMemory = memory;
+}
+
+function upsertQualitativeInsightCard(session, topic, insight) {
+  const title = String(insight?.title || '').trim();
+  const body = String(insight?.body || '').trim();
+  const category = String(insight?.category || '').trim().toLowerCase();
+  if (!title || !body || !category) return;
+
+  const metricKey = `qual:${normalizeInsightKey(category)}:${normalizeInsightKey(title)}`;
+  const now = Date.now();
+  const insights = Array.isArray(session.insights) ? session.insights : [];
+  const existingIndex = insights.findIndex((i) => i?.metricKey === metricKey);
+  const next = {
+    id: existingIndex >= 0 ? insights[existingIndex].id : `${now}-${metricKey}`,
+    metricKey,
+    type: mapInsightCategoryToType(category),
+    title: `${title}`,
+    body,
+    highlight: Array.isArray(insight?.highlight)
+      ? insight.highlight.map((h) => String(h || '').trim()).filter(Boolean).slice(0, 4)
+      : [],
+    updatedAt: now,
+  };
+  if (existingIndex >= 0) insights[existingIndex] = next;
+  else insights.push(next);
   insights.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
   session.insights = insights.slice(0, 24);
 }
@@ -304,6 +414,155 @@ async function analyzeWithContext({ sessionId, latestText }) {
   return { topic: maybeTopic, keyNumbers: [] };
 }
 
+async function analyzeInsightsWithContext({ sessionId, latestText, detectedTopic }) {
+  if (!OPENAI_API_KEY) {
+    throw new Error('OPENAI_API_KEY is not set');
+  }
+  const session = getSession(sessionId);
+  const contextText = session.lines
+    .map((l) => `[${l.type}] ${l.text}`)
+    .join('\n')
+    .slice(-12000);
+  const topicContext = String(detectedTopic || session.topic || 'unknown').trim() || 'unknown';
+  const memory = session.insightMemory || {};
+
+  const response = await fetch('https://api.openai.com/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${OPENAI_API_KEY}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      model: 'gpt-4o-mini',
+      temperature: 0.2,
+      response_format: {
+        type: 'json_schema',
+        json_schema: {
+          name: 'qualitative_insights_result',
+          schema: {
+            type: 'object',
+            properties: {
+              insights: {
+                type: 'array',
+                items: {
+                  type: 'object',
+                  properties: {
+                    category: {
+                      type: 'string',
+                      enum: ['fact', 'intention', 'result', 'risk', 'obstacle', 'next_step'],
+                    },
+                    title: { type: 'string' },
+                    body: { type: 'string' },
+                    highlight: { type: 'array', items: { type: 'string' } },
+                  },
+                  required: ['category', 'title', 'body'],
+                  additionalProperties: false,
+                },
+              },
+            },
+            required: ['insights'],
+            additionalProperties: false,
+          },
+        },
+      },
+      messages: [
+        {
+          role: 'system',
+          content:
+            'You create concise qualitative insights for a live sales assistant.\n' +
+            'Use detected topic as primary context.\n' +
+            'Focus on facts, intentions, results, risks, obstacles, and next steps.\n' +
+            'Return 0-4 items only, each short and specific.\n' +
+            'Do not return numeric metrics here.\n' +
+            'Return strict JSON.',
+        },
+        {
+          role: 'user',
+          content:
+            `Session: ${sessionId}\n` +
+            `Detected topic: ${topicContext}\n` +
+            `Previous qualitative memory: ${JSON.stringify(memory).slice(0, 2500)}\n` +
+            `Conversation context (oldest to newest):\n${contextText}\n\n` +
+            `Latest chunk to focus on:\n${latestText}`,
+        },
+      ],
+    }),
+  });
+
+  if (!response.ok) {
+    const errText = await response.text().catch(() => response.statusText);
+    throw new Error(`OpenAI API ${response.status}: ${errText}`);
+  }
+
+  const data = await response.json();
+  const raw = data?.choices?.[0]?.message?.content?.trim() ?? '';
+  if (!raw) return deriveHeuristicInsights(detectedTopic, latestText);
+  try {
+    const parsed = JSON.parse(raw);
+    const insights = Array.isArray(parsed?.insights)
+      ? parsed.insights
+          .map((i) => ({
+            category: typeof i?.category === 'string' ? i.category.trim().toLowerCase() : '',
+            title: typeof i?.title === 'string' ? i.title.trim() : '',
+            body: typeof i?.body === 'string' ? i.body.trim() : '',
+            highlight: Array.isArray(i?.highlight)
+              ? i.highlight.map((h) => String(h || '').trim()).filter(Boolean)
+              : [],
+          }))
+          .filter((i) => i.category && i.title && i.body)
+          .slice(0, 4)
+      : [];
+    return insights.length > 0 ? insights : deriveHeuristicInsights(detectedTopic, latestText);
+  } catch {
+    return deriveHeuristicInsights(detectedTopic, latestText);
+  }
+}
+
+function deriveHeuristicInsights(detectedTopic, latestText) {
+  const topic = String(detectedTopic || 'unknown').trim() || 'unknown';
+  const text = String(latestText || '').trim();
+  if (!text) return [];
+  const lower = text.toLowerCase();
+
+  const insights = [
+    {
+      category: 'fact',
+      title: 'Current discussion point',
+      body: `Conversation is focused on ${topic}.`,
+      highlight: [topic],
+    },
+  ];
+
+  if (/\b(need|want|looking for|prefer|hope)\b/.test(lower)) {
+    insights.push({
+      category: 'intention',
+      title: 'Client intention detected',
+      body: text.slice(0, 180),
+      highlight: ['need', 'want', 'looking for', 'prefer'],
+    });
+  }
+
+  if (/\b(not sure|unsure|concern|worry|expensive|pricey|too high|risk)\b/.test(lower)) {
+    insights.push({
+      category: 'risk',
+      title: 'Potential objection',
+      body: `Client signals concern: "${text.slice(0, 160)}"`,
+      highlight: ['not sure', 'concern', 'expensive', 'pricey', 'too high', 'risk'],
+    });
+  }
+
+  if (/\b(next step|follow up|tomorrow|next week|schedule|send)\b/.test(lower)) {
+    insights.push({
+      category: 'next_step',
+      title: 'Next step candidate',
+      body: text.slice(0, 180),
+      highlight: ['next step', 'follow up', 'schedule', 'send'],
+    });
+  }
+
+  return insights.slice(0, 4);
+}
+
 function deriveTopicHeuristic(text) {
   const t = String(text || '').toLowerCase();
   if (!t) return 'unknown';
@@ -328,6 +587,9 @@ function runMetricAnalysisNow(sessionId) {
   session.analysisInFlight = true;
   session.pendingLatestText = '';
   const ts = new Date().toISOString();
+
+  // Start qualitative analysis in parallel with metric analysis.
+  runInsightAnalysisNow(sessionId, session.topic);
 
   analyzeWithContext({ sessionId, latestText })
     .then(({ topic, keyNumbers }) => {
@@ -391,6 +653,10 @@ function runMetricAnalysisNow(sessionId) {
             .join(', ')}`
         );
       }
+
+      const latestInsightText = s.pendingInsightLatestText || latestText;
+      s.pendingInsightLatestText = latestInsightText;
+      runInsightAnalysisNow(sessionId, topic);
     })
     .catch((err) => {
       console.error(`[${ts}] [${sessionId}] [analysis:error] ${err.message}`);
@@ -400,6 +666,41 @@ function runMetricAnalysisNow(sessionId) {
       s.analysisInFlight = false;
       if (s.pendingLatestText) {
         scheduleAnalysis(sessionId, 'final');
+      }
+    });
+}
+
+function runInsightAnalysisNow(sessionId, detectedTopic) {
+  const session = getSession(sessionId);
+  const latestText = String(session.pendingInsightLatestText || '').trim();
+  if (!latestText || session.insightAnalysisInFlight) return;
+
+  session.insightAnalysisInFlight = true;
+  session.pendingInsightLatestText = '';
+  const ts = new Date().toISOString();
+
+  analyzeInsightsWithContext({ sessionId, latestText, detectedTopic })
+    .then((insightItems) => {
+      const s = getSession(sessionId);
+      s.lastInsightAnalyzedAt = Date.now();
+      if (Array.isArray(insightItems) && insightItems.length > 0) {
+        mergeInsightMemory(s, detectedTopic || s.topic, insightItems);
+        insightItems.forEach((insight) => upsertQualitativeInsightCard(s, detectedTopic || s.topic, insight));
+        console.log(
+          `[${ts}] [${sessionId}] [insights] ${insightItems
+            .map((i) => `${i.category}:${i.title}`)
+            .join(', ')}`
+        );
+      }
+    })
+    .catch((err) => {
+      console.error(`[${ts}] [${sessionId}] [insight-analysis:error] ${err.message}`);
+    })
+    .finally(() => {
+      const s = getSession(sessionId);
+      s.insightAnalysisInFlight = false;
+      if (s.pendingInsightLatestText) {
+        runInsightAnalysisNow(sessionId, s.topic);
       }
     });
 }
@@ -446,6 +747,7 @@ app.post('/transcript', (req, res) => {
   console.log(`[${ts}] [${normalizedSessionId}] [${normalizedType}] ${text}`);
   const session = getSession(normalizedSessionId);
   session.pendingLatestText = text.trim();
+  session.pendingInsightLatestText = text.trim();
   scheduleAnalysis(normalizedSessionId, normalizedType);
 
   res.json({ ok: true, sessionId: normalizedSessionId });

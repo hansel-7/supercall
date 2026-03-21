@@ -11,6 +11,7 @@ export default function App() {
   const serverUrl = import.meta.env.VITE_SERVER_URL || 'http://localhost:3001';
   const sessionIdRef = useRef('default');
   const [activeSessionId, setActiveSessionId] = useState('default');
+  const [sessionReady, setSessionReady] = useState(false);
   const [topic, setTopic] = useState('unknown');
   const [keyNumbers, setKeyNumbers] = useState([]);
   const [insights, setInsights] = useState([]);
@@ -19,6 +20,7 @@ export default function App() {
     clearLines();
     sentLineCountRef.current = 0;
     lastInterimRef.current = '';
+    setSessionReady(false);
     setTopic('unknown');
     setKeyNumbers([]);
     setInsights([]);
@@ -38,11 +40,13 @@ export default function App() {
         if (typeof data?.sessionId === 'string' && data.sessionId.trim()) {
           const sessionId = data.sessionId.trim();
           sessionIdRef.current = sessionId;
+          setSessionReady(true);
           setActiveSessionId(sessionId);
         }
       })
       .catch(() => {
         sessionIdRef.current = 'default';
+        setSessionReady(true);
         setActiveSessionId('default');
       });
   }, [resetUiState, serverUrl, start]);
@@ -57,6 +61,7 @@ export default function App() {
   }, [resetUiState, serverUrl]);
 
   useEffect(() => {
+    if (!sessionReady) return;
     if (lines.length < sentLineCountRef.current) {
       sentLineCountRef.current = 0;
     }
@@ -77,9 +82,10 @@ export default function App() {
         }),
       }).catch(() => {});
     });
-  }, [lines, serverUrl]);
+  }, [lines, serverUrl, sessionReady]);
 
   useEffect(() => {
+    if (!sessionReady) return;
     if (!interim || interim === lastInterimRef.current) return;
     lastInterimRef.current = interim;
 
@@ -93,7 +99,7 @@ export default function App() {
         at: Date.now(),
       }),
     }).catch(() => {});
-  }, [interim, serverUrl]);
+  }, [interim, serverUrl, sessionReady]);
 
   useEffect(() => {
     if (!activeSessionId) return undefined;
@@ -107,8 +113,30 @@ export default function App() {
         if (cancelled) return;
         setTopic(typeof data?.topic === 'string' && data.topic.trim() ? data.topic.trim() : 'unknown');
         setKeyNumbers(Array.isArray(data?.keyNumbers) ? data.keyNumbers : []);
-        // Temporarily disable Live Insights rendering.
-        setInsights([]);
+        if (Array.isArray(data?.insights)) {
+          const deduped = new Map();
+          data.insights
+            .filter((insight) => String(insight?.type || '').toLowerCase() !== 'metric')
+            .forEach((insight) => {
+              const key =
+                String(insight?.metricKey || insight?.id || '')
+                  .trim()
+                  .toLowerCase() || '';
+              if (!key) return;
+              const existing = deduped.get(key);
+              const insightTime = Number(insight?.updatedAt || 0);
+              const existingTime = Number(existing?.updatedAt || 0);
+              if (!existing || insightTime >= existingTime) {
+                deduped.set(key, insight);
+              }
+            });
+          const nextInsights = Array.from(deduped.values())
+            .sort((a, b) => Number(b?.updatedAt || 0) - Number(a?.updatedAt || 0))
+            .slice(0, 12);
+          setInsights(nextInsights);
+        } else {
+          setInsights([]);
+        }
       } catch {
         // ignore transient network errors
       }
