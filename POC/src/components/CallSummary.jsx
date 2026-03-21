@@ -72,8 +72,8 @@ function groupInsights(insights) {
 function MetricsPanel({ metrics }) {
   return (
     <div className="px-6 py-5 h-full overflow-y-auto">
-      <h3 className="text-sm font-semibold text-white mb-1">Key Metrics</h3>
-      <p className="text-xs text-gray-500 mb-4">Compared against last call values.</p>
+      <h3 className="text-xs font-semibold text-white mb-1">Key Metrics</h3>
+      <p className="text-[10px] text-gray-500 mb-4">Compared against last call values.</p>
 
       <div className="grid grid-cols-[1fr_auto_auto] gap-x-8 gap-y-0">
         <div />
@@ -87,13 +87,13 @@ function MetricsPanel({ metrics }) {
 
         {metrics.map((m) => (
           <div key={m.key} className="contents group">
-            <span className="text-sm text-gray-400 py-2.5 self-center leading-tight">{m.label}</span>
-            <span className="text-sm font-mono text-gray-400 text-right py-2.5 self-center">{m.prev}</span>
+            <span className="text-xs text-gray-400 py-2.5 self-center leading-tight">{m.label}</span>
+            <span className="text-xs font-mono text-gray-400 text-right py-2.5 self-center">{m.prev}</span>
             <div className="flex items-center justify-end gap-1.5 py-2.5 self-center">
               {m.current ? (
                 <>
                   {directionIcon(m.prev, m.current)}
-                  <span className="text-base font-mono font-bold text-white">{m.current}</span>
+                  <span className="text-sm font-mono font-bold text-white">{m.current}</span>
                 </>
               ) : (
                 <span className="text-sm font-mono text-gray-600 italic">n/d</span>
@@ -119,8 +119,8 @@ function ActionItemsPanel({ actionItems }) {
 
   return (
     <div className="px-6 py-5 h-full overflow-y-auto">
-      <h3 className="text-sm font-semibold text-white mb-1">Action Items</h3>
-      <p className="text-xs text-gray-500 mb-4">{actionItems.length} items detected during this call.</p>
+      <h3 className="text-xs font-semibold text-white mb-1">Action Items</h3>
+      <p className="text-[10px] text-gray-500 mb-4">{actionItems.length} items detected during this call.</p>
 
       <div className="space-y-2.5 pl-2">
         {actionItems.map((item) => {
@@ -132,9 +132,9 @@ function ActionItemsPanel({ actionItems }) {
               key={item.id}
               className="border-l-2 border-amber-500/30 pl-4 py-0.5 hover:border-amber-500/60 transition-colors"
             >
-              <p className="text-sm font-medium text-gray-300 leading-snug">{title}</p>
+              <p className="text-xs font-medium text-gray-300 leading-snug">{title}</p>
               {item.detail && (
-                <p className="text-xs text-gray-500 leading-relaxed mt-1">{item.detail}</p>
+                <p className="text-[10px] text-gray-500 leading-relaxed mt-1">{item.detail}</p>
               )}
             </div>
           );
@@ -158,8 +158,8 @@ function InsightsPanel({ insights }) {
 
   return (
     <div className="px-6 py-5 h-full overflow-y-auto">
-      <h3 className="text-sm font-semibold text-white mb-1">Live Insights</h3>
-      <p className="text-xs text-gray-500 mb-4">{insights.length} insights surfaced during this call.</p>
+      <h3 className="text-xs font-semibold text-white mb-1">Live Insights</h3>
+      <p className="text-[10px] text-gray-500 mb-4">{insights.length} insights surfaced during this call.</p>
 
       <div className="space-y-8">
         {groups.map(({ type, items }) => {
@@ -170,10 +170,10 @@ function InsightsPanel({ insights }) {
               {/* Group header */}
               <div className="flex items-center gap-2 mb-3">
                 <Icon className={`w-4 h-4 ${cfg.color}`} />
-                <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${cfg.badge}`}>
+                <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${cfg.badge}`}>
                   {cfg.label}
                 </span>
-                <span className="text-xs text-gray-600 ml-auto">{items.length}</span>
+                <span className="text-[10px] text-gray-600 ml-auto">{items.length}</span>
               </div>
 
               {/* Group items */}
@@ -183,8 +183,8 @@ function InsightsPanel({ insights }) {
                     key={ins.id}
                     className="border-l-2 border-white/10 pl-4 py-0.5 hover:border-white/20 transition-colors"
                   >
-                    <p className="text-sm font-medium text-gray-300 leading-snug">{ins.title}</p>
-                    <p className="text-xs text-gray-500 leading-relaxed mt-1">{ins.body}</p>
+                    <p className="text-xs font-medium text-gray-300 leading-snug">{ins.title}</p>
+                    <p className="text-[10px] text-gray-500 leading-relaxed mt-1">{ins.body}</p>
                   </div>
                 ))}
               </div>
@@ -302,15 +302,15 @@ export default function CallSummary({
                       key={tab.id}
                       onClick={() => setActiveTab(tab.id)}
                       className={`
-                        relative flex items-center gap-2 px-4 py-2.5 text-xs font-medium transition-colors
+                        relative flex items-center gap-2 px-5 py-3 text-sm font-semibold transition-colors
                         ${isActive ? `${tab.activeColor}` : 'text-gray-500 hover:text-gray-300'}
                       `}
                     >
-                    <Icon className="w-4 h-4 flex-shrink-0" />
+                    <Icon className="w-5 h-5 flex-shrink-0" />
                     <span>{tab.label}</span>
                     {count > 0 && (
                       <span className={`
-                        text-[10px] font-semibold px-1.5 py-0.5 rounded-full ml-0.5
+                        text-xs font-semibold px-1.5 py-0.5 rounded-full ml-0.5
                         ${isActive ? `${tab.activeBg} ${tab.activeColor}` : 'bg-white/5 text-gray-600'}
                       `}>
                         {count}
