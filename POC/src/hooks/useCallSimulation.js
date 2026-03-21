@@ -2,14 +2,8 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { callScript } from '../data/callScript';
 import { insights } from '../data/insights';
 
-// Fallback duration used when audio duration is unknown
 const DEFAULT_STEP_DURATION = 4000;
 
-/**
- * getStepDuration(stepIndex) → number|null
- * Called by the simulation to decide how long to wait before advancing.
- * Should return the audio clip duration in ms, or null to use the default.
- */
 export function useCallSimulation(getStepDuration) {
   const [currentIndex, setCurrentIndex] = useState(-1);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -24,12 +18,12 @@ export function useCallSimulation(getStepDuration) {
     founderConfidence: [70],
   });
 
-  const timerRef = useRef(null);
+  const timerRef = useRef(null);       // controls when next step starts
+  const insightTimerRef = useRef(null); // controls when insights for current step fire
   const durationRef = useRef(null);
   const isPlayingRef = useRef(false);
   const advanceStepRef = useRef(null);
 
-  // Keep latest getStepDuration in a ref so setTimeout callbacks always use current value
   const getStepDurationRef = useRef(getStepDuration);
   useEffect(() => {
     getStepDurationRef.current = getStepDuration;
@@ -64,6 +58,31 @@ export function useCallSimulation(getStepDuration) {
     };
   }, []);
 
+  // Fires insights and action items — called near the END of a step's audio
+  const fireInsightsForStep = useCallback((step) => {
+    if (!step.triggers || step.triggers.length === 0) return;
+
+    const newInsights = step.triggers
+      .map((id) => insights[id])
+      .filter(Boolean)
+      .map((insight) => ({ ...insight, timestamp: Date.now() }));
+
+    const newActions = newInsights.filter((i) => i.id.startsWith('action-'));
+    setActiveInsights((existing) => [...existing, ...newInsights]);
+
+    if (newActions.length > 0) {
+      setActionItems((existing) => [
+        ...existing,
+        ...newActions.map((a) => ({
+          id: a.id,
+          text: a.title.replace('Action: ', ''),
+          detail: a.body,
+          completed: false,
+        })),
+      ]);
+    }
+  }, []);
+
   const advanceStep = useCallback(() => {
     setCurrentIndex((prevIdx) => {
       const next = prevIdx + 1;
@@ -76,35 +95,22 @@ export function useCallSimulation(getStepDuration) {
       }
 
       const step = callScript[next];
+      const stepDuration = getStepDurationRef.current?.(next) ?? DEFAULT_STEP_DURATION;
+
+      // Immediately: update speaker + transcript so word reveal starts with the audio
       setCurrentSpeaker(step.speaker);
       setTranscript((t) => [...t, { speaker: step.speaker, name: step.name, text: step.text }]);
-
-      if (step.triggers && step.triggers.length > 0) {
-        const newInsights = step.triggers
-          .map((id) => insights[id])
-          .filter(Boolean)
-          .map((insight) => ({ ...insight, timestamp: Date.now() }));
-
-        const newActions = newInsights.filter((i) => i.id.startsWith('action-'));
-        setActiveInsights((existing) => [...existing, ...newInsights]);
-
-        if (newActions.length > 0) {
-          setActionItems((existing) => [
-            ...existing,
-            ...newActions.map((a) => ({
-              id: a.id,
-              text: a.title.replace('Action: ', ''),
-              detail: a.body,
-              completed: false,
-            })),
-          ]);
-        }
-      }
-
       setSentimentHistory((prev) => computeSentiment(step, prev));
 
-      // Schedule next step to fire after this step's audio duration
-      const stepDuration = getStepDurationRef.current?.(next) ?? DEFAULT_STEP_DURATION;
+      // Delayed: fire insights only after ~85% of the audio has played
+      // This ensures the speaker has said the relevant words before the AI "reacts"
+      if (insightTimerRef.current) clearTimeout(insightTimerRef.current);
+      const insightDelay = Math.max(500, stepDuration * 0.85);
+      insightTimerRef.current = setTimeout(() => {
+        fireInsightsForStep(step);
+      }, insightDelay);
+
+      // Schedule the next turn after the full audio duration
       if (timerRef.current) clearTimeout(timerRef.current);
       timerRef.current = setTimeout(() => {
         if (isPlayingRef.current) advanceStepRef.current?.();
@@ -112,37 +118,30 @@ export function useCallSimulation(getStepDuration) {
 
       return next;
     });
-  }, [computeSentiment]);
+  }, [computeSentiment, fireInsightsForStep]);
 
-  // Always keep advanceStepRef pointing to the latest function
   advanceStepRef.current = advanceStep;
 
   const play = useCallback(() => {
     if (!isCallActive) setIsCallActive(true);
     isPlayingRef.current = true;
     setIsPlaying(true);
-    // Kick off the first (or next) step immediately
     advanceStep();
-  // advanceStep is stable (computeSentiment has no deps that change)
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isCallActive]);
 
   const pause = useCallback(() => {
     isPlayingRef.current = false;
     setIsPlaying(false);
-    if (timerRef.current) {
-      clearTimeout(timerRef.current);
-      timerRef.current = null;
-    }
+    if (timerRef.current) { clearTimeout(timerRef.current); timerRef.current = null; }
+    if (insightTimerRef.current) { clearTimeout(insightTimerRef.current); insightTimerRef.current = null; }
   }, []);
 
   const restart = useCallback(() => {
     isPlayingRef.current = false;
     setIsPlaying(false);
-    if (timerRef.current) {
-      clearTimeout(timerRef.current);
-      timerRef.current = null;
-    }
+    if (timerRef.current) { clearTimeout(timerRef.current); timerRef.current = null; }
+    if (insightTimerRef.current) { clearTimeout(insightTimerRef.current); insightTimerRef.current = null; }
     setCurrentIndex(-1);
     setTranscript([]);
     setActiveInsights([]);
@@ -153,7 +152,6 @@ export function useCallSimulation(getStepDuration) {
     setSentimentHistory({ vcInterest: [55], founderConfidence: [70] });
   }, []);
 
-  // Wall-clock call duration timer (separate from simulation tick)
   useEffect(() => {
     if (isCallActive && isPlaying) {
       durationRef.current = setInterval(() => {
