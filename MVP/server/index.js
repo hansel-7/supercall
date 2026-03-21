@@ -39,9 +39,6 @@ app.post('/session', (_req, res) => {
   const sessionId = randomUUID();
   sessionStore.set(sessionId, {
     lines: [],
-    refinedContext: 'No context yet.',
-    conversationNature: 'unknown',
-    lastLoggedNature: 'unknown',
     analysisInFlight: false,
     analysisTimer: null,
     lastAnalyzedAt: 0,
@@ -54,9 +51,6 @@ function getSession(sessionId) {
   if (!sessionStore.has(sessionId)) {
     sessionStore.set(sessionId, {
       lines: [],
-      refinedContext: 'No context yet.',
-      conversationNature: 'unknown',
-      lastLoggedNature: 'unknown',
       analysisInFlight: false,
       analysisTimer: null,
       lastAnalyzedAt: 0,
@@ -85,10 +79,8 @@ async function analyzeWithContext({ sessionId, latestText }) {
     .map((l) => `[${l.type}] ${l.text}`)
     .join('\n')
     .slice(-12000);
-  const previousRefinedContext = session.refinedContext || 'No context yet.';
-  const previousNature = session.conversationNature || 'unknown';
 
-  const response = await fetch('https://api.openai.com/v1/responses', {
+  const response = await fetch('https://api.openai.com/v1/chat/completions', {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${OPENAI_API_KEY}`,
@@ -96,25 +88,33 @@ async function analyzeWithContext({ sessionId, latestText }) {
     },
     body: JSON.stringify({
       model: 'gpt-4o-mini',
-      input: [
+      temperature: 0,
+      response_format: {
+        type: 'json_schema',
+        json_schema: {
+          name: 'topic_result',
+          schema: {
+            type: 'object',
+            properties: {
+              topic: { type: 'string' },
+            },
+            required: ['topic'],
+            additionalProperties: false,
+          },
+        },
+      },
+      messages: [
         {
           role: 'system',
           content:
-            'You analyze streaming call transcript chunks with memory.\n' +
-            'Continuously refine context and infer the conversation nature.\n' +
-            'Task 1: identify the current topic in 3-8 words.\n' +
-            'Task 2: classify conversation nature (e.g., sales call, support, interview, negotiation, casual chat).\n' +
-            'Task 3: update refined context summary in 1-2 concise sentences.\n' +
-            'Task 4: extract all numeric values mentioned in the latest chunk.\n' +
-            'Return strict JSON only with shape: {"topic":"...","nature":"...","refinedContext":"...","numbers":["..."]}.\n' +
-            'For numbers, preserve formatting like %, $, ranges, and decimals.',
+            'You analyze streaming conversation transcript with context memory.\n' +
+            'Identify the current conversation topic in 3-8 words.\n' +
+            'Return JSON: {"topic":"..."}',
         },
         {
           role: 'user',
           content:
             `Session: ${sessionId}\n` +
-            `Previous nature: ${previousNature}\n` +
-            `Previous refined context:\n${previousRefinedContext}\n\n` +
             `Conversation context (oldest to newest):\n${contextText}\n\n` +
             `Latest chunk to focus on:\n${latestText}`,
         },
@@ -128,41 +128,44 @@ async function analyzeWithContext({ sessionId, latestText }) {
   }
 
   const data = await response.json();
-  const raw = data?.output_text?.trim() ?? '';
-  if (!raw) {
-    return {
-      topic: 'unknown',
-      nature: previousNature,
-      refinedContext: previousRefinedContext,
-      numbers: [],
-    };
-  }
+  const raw = data?.choices?.[0]?.message?.content?.trim() ?? '';
+  if (!raw) return { topic: deriveTopicHeuristic(latestText) };
 
   try {
     const parsed = JSON.parse(raw);
     const topic = typeof parsed?.topic === 'string' && parsed.topic.trim()
       ? parsed.topic.trim()
       : 'unknown';
-    const nature = typeof parsed?.nature === 'string' && parsed.nature.trim()
-      ? parsed.nature.trim()
-      : previousNature;
-    const refinedContext = typeof parsed?.refinedContext === 'string' && parsed.refinedContext.trim()
-      ? parsed.refinedContext.trim()
-      : previousRefinedContext;
-    const numbers = Array.isArray(parsed?.numbers)
-      ? parsed.numbers.map((n) => String(n))
-      : [];
-    return { topic, nature, refinedContext, numbers };
+    return { topic };
   } catch {
     // fallback below
   }
 
-  return {
-    topic: 'unknown',
-    nature: previousNature,
-    refinedContext: previousRefinedContext,
-    numbers: raw.match(/-?\d+(?:[.,]\d+)?%?/g) ?? [],
-  };
+  // Fallback: salvage topic from plain-text output.
+  const maybeTopic =
+    raw
+      .replace(/^```(?:json)?/i, '')
+      .replace(/```$/, '')
+      .replace(/^topic\s*:\s*/i, '')
+      .trim() || deriveTopicHeuristic(latestText);
+
+  return { topic: maybeTopic };
+}
+
+function deriveTopicHeuristic(text) {
+  const t = String(text || '').toLowerCase();
+  if (!t) return 'unknown';
+  if (t.includes('raise') && (t.includes('fund') || t.includes('investment'))) {
+    return 'startup fundraising discussion';
+  }
+  if (t.includes('customer') || t.includes('support')) return 'customer support discussion';
+  if (t.includes('interview') || t.includes('candidate')) return 'job interview discussion';
+  if (t.includes('contract') || t.includes('pricing')) return 'commercial negotiation';
+  return text
+    .trim()
+    .split(/\s+/)
+    .slice(0, 6)
+    .join(' ');
 }
 
 function runAnalysisNow(sessionId) {
@@ -175,21 +178,10 @@ function runAnalysisNow(sessionId) {
   const ts = new Date().toISOString();
 
   analyzeWithContext({ sessionId, latestText })
-    .then(({ topic, nature, refinedContext, numbers }) => {
+    .then(({ topic }) => {
       const s = getSession(sessionId);
-      const prevLoggedNature = s.lastLoggedNature || 'unknown';
-      s.conversationNature = nature;
-      s.refinedContext = refinedContext;
       s.lastAnalyzedAt = Date.now();
-
       console.log(`[${ts}] [${sessionId}] [topic] ${topic}`);
-      console.log(`[${ts}] [${sessionId}] [nature] ${nature}`);
-      if (nature && nature !== 'unknown' && nature !== prevLoggedNature) {
-        console.log(`[${ts}] [${sessionId}] [nature:identified] ${nature}`);
-      }
-      s.lastLoggedNature = nature || prevLoggedNature;
-      console.log(`[${ts}] [${sessionId}] [context] ${refinedContext}`);
-      console.log(`[${ts}] [${sessionId}] [numbers] ${numbers.length ? numbers.join(', ') : '(none)'}`);
     })
     .catch((err) => {
       console.error(`[${ts}] [${sessionId}] [analysis:error] ${err.message}`);
