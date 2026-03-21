@@ -24,9 +24,9 @@ export default function InsightFeed({ insights }) {
   return (
     <div ref={scrollRef} className="h-full overflow-y-auto space-y-2 pr-1">
       <AnimatePresence mode="popLayout">
-        {insights.map((insight, idx) => (
+        {insights.map((insight) => (
           <motion.div
-            key={insight.id + '-' + idx}
+            key={insight.metricKey || insight.id}
             layout
             initial={{ opacity: 0, y: 16 }}
             animate={{ opacity: 1, y: 0 }}

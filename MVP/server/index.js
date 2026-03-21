@@ -41,8 +41,8 @@ app.post('/session', (_req, res) => {
     lines: [],
     topic: 'unknown',
     keyNumbers: [],
+    metricUpdates: [],
     insights: [],
-    lastInsightSignature: '',
     analysisInFlight: false,
     analysisTimer: null,
     lastAnalyzedAt: 0,
@@ -59,6 +59,7 @@ app.get('/session/:sessionId/state', (req, res) => {
     sessionId,
     topic: session.topic || 'unknown',
     keyNumbers: session.keyNumbers || [],
+    metricUpdates: session.metricUpdates || [],
     insights: session.insights || [],
     lineCount: session.lines.length,
   });
@@ -70,8 +71,8 @@ function getSession(sessionId) {
       lines: [],
       topic: 'unknown',
       keyNumbers: [],
+      metricUpdates: [],
       insights: [],
-      lastInsightSignature: '',
       analysisInFlight: false,
       analysisTimer: null,
       lastAnalyzedAt: 0,
@@ -104,9 +105,24 @@ function normalizeMetricLabel(label) {
   if (compact.includes('monthly payment')) return 'monthly payment';
 
   return compact
-    .replace(/\b(initial|proposed|option|options|amount|starts|start|at)\b/g, '')
+    .replace(/\b(initial|proposed|option|options|amount|starts|start|at|new|updated|current|latest)\b/g, '')
     .replace(/\s+/g, ' ')
     .trim();
+}
+
+function normalizeMetricKey(metricKeyOrLabel) {
+  const raw = String(metricKeyOrLabel || '')
+    .toLowerCase()
+    .replace(/[_-]+/g, ' ')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+  if (!raw) return '';
+
+  const compact = raw.replace(/\s+/g, ' ');
+  if (compact.includes('meeting time') || compact.includes('appointment time')) {
+    return 'meeting time';
+  }
+  return normalizeMetricLabel(compact);
 }
 
 function formatMetricLabel(normalizedLabel, fallbackLabel) {
@@ -125,7 +141,49 @@ function normalizeMetricValue(value) {
   if (!raw) return '';
   const numeric = raw.replace(/[, ]+/g, '');
   if (/^-?\d+(\.\d+)?$/.test(numeric)) return numeric;
-  return raw.toLowerCase();
+  return raw.toLowerCase().replace(/\s+/g, ' ').trim();
+}
+
+function appendMetricUpdate(session, { metricKey, label, previousValue, nextValue }) {
+  if (!metricKey) return;
+  const updates = Array.isArray(session.metricUpdates) ? session.metricUpdates : [];
+  const now = Date.now();
+  updates.push({
+    id: `${now}-${metricKey}`,
+    metricKey,
+    label,
+    previousValue,
+    value: nextValue,
+    updatedAt: now,
+  });
+  session.metricUpdates = updates.slice(-200);
+}
+
+function upsertMetricInsight(session, metric) {
+  const metricKey = normalizeMetricLabel(metric?.label);
+  if (!metricKey) return;
+
+  const now = Date.now();
+  const insights = Array.isArray(session.insights) ? session.insights : [];
+  const existingIndex = insights.findIndex((i) => i?.metricKey === metricKey);
+  const nextInsight = {
+    id: existingIndex >= 0 ? insights[existingIndex].id : `${now}-${metricKey}`,
+    metricKey,
+    type: 'metric',
+    title: metric.label,
+    body: `${metric.label}: ${metric.value}`,
+    highlight: [metric.value],
+    updatedAt: now,
+  };
+
+  if (existingIndex >= 0) {
+    insights[existingIndex] = nextInsight;
+  } else {
+    insights.push(nextInsight);
+  }
+
+  insights.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+  session.insights = insights.slice(0, 24);
 }
 
 async function analyzeWithContext({ sessionId, latestText }) {
@@ -162,6 +220,7 @@ async function analyzeWithContext({ sessionId, latestText }) {
                 items: {
                   type: 'object',
                   properties: {
+                    metricKey: { type: 'string' },
                     label: { type: 'string' },
                     value: { type: 'string' },
                   },
@@ -181,10 +240,12 @@ async function analyzeWithContext({ sessionId, latestText }) {
           content:
             'You analyze streaming conversation transcript with context memory.\n' +
             'Task 1: identify current topic in 3-8 words.\n' +
-            'Task 2: extract key numbers that are relevant to that topic only.\n' +
+            'Task 2: extract key numbers relevant to that topic across the full conversation context.\n' +
+            'For each metric, provide the latest/current value mentioned so far.\n' +
+            'Also provide metricKey: a stable semantic key in snake_case so updates map correctly (example: meeting_time, down_payment, monthly_payment).\n' +
             'Each number must include a short semantic label.\n' +
             'If no topic-relevant number appears, return an empty keyNumbers array.\n' +
-            'Return JSON: {"topic":"...","keyNumbers":[{"label":"...","value":"..."}]}',
+            'Return JSON: {"topic":"...","keyNumbers":[{"metricKey":"...","label":"...","value":"..."}]}',
         },
         {
           role: 'user',
@@ -215,6 +276,7 @@ async function analyzeWithContext({ sessionId, latestText }) {
     const keyNumbers = Array.isArray(parsed?.keyNumbers)
       ? parsed.keyNumbers
           .map((k) => ({
+            metricKey: typeof k?.metricKey === 'string' ? k.metricKey.trim() : '',
             label: typeof k?.label === 'string' ? k.label.trim() : '',
             value: typeof k?.value === 'string' ? k.value.trim() : '',
           }))
@@ -274,10 +336,10 @@ function runAnalysisNow(sessionId) {
         const changedNumbers = [];
 
         keyNumbers.forEach((k) => {
-          const normalizedLabel = normalizeMetricLabel(k.label);
-          if (!normalizedLabel) return;
+          const semanticKey = normalizeMetricKey(k.metricKey || k.label);
+          if (!semanticKey) return;
 
-          const existing = mergedByLabel.get(normalizedLabel);
+          const existing = mergedByLabel.get(semanticKey);
           const nextValue = String(k.value || '').trim();
           if (!nextValue) return;
 
@@ -288,35 +350,30 @@ function runAnalysisNow(sessionId) {
           }
 
           const nextMetric = {
-            label: formatMetricLabel(normalizedLabel, existing?.label || k.label),
+            metricKey: semanticKey,
+            label: formatMetricLabel(semanticKey, existing?.label || k.label),
             value: nextValue,
             updatedAt: Date.now(),
           };
-          mergedByLabel.set(normalizedLabel, nextMetric);
-          changedNumbers.push(nextMetric);
+          mergedByLabel.set(semanticKey, nextMetric);
+          changedNumbers.push({
+            metric: nextMetric,
+            previousValue: existing?.value ?? null,
+          });
         });
 
         s.keyNumbers = Array.from(mergedByLabel.values());
 
         if (changedNumbers.length > 0) {
-          const insightSignature = changedNumbers
-            .map((k) => `${normalizeMetricLabel(k.label)}=${k.value}`)
-            .sort()
-            .join('|');
-
-          if (insightSignature !== s.lastInsightSignature) {
-            s.lastInsightSignature = insightSignature;
-            s.insights = [
-              ...(s.insights || []).slice(-24),
-              {
-                id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-                type: 'metric',
-                title: 'Key numbers update',
-                body: changedNumbers.map((k) => `${k.label}: ${k.value}`).join(' · '),
-                highlight: changedNumbers.map((k) => k.value),
-              },
-            ];
-          }
+          changedNumbers.forEach(({ metric, previousValue }) => {
+            appendMetricUpdate(s, {
+              metricKey: metric.metricKey || normalizeMetricLabel(metric.label),
+              label: metric.label,
+              previousValue,
+              nextValue: metric.value,
+            });
+            upsertMetricInsight(s, metric);
+          });
         }
       }
 

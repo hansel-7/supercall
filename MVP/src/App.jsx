@@ -103,7 +103,28 @@ export default function App() {
         if (cancelled) return;
         setTopic(typeof data?.topic === 'string' && data.topic.trim() ? data.topic.trim() : 'unknown');
         setKeyNumbers(Array.isArray(data?.keyNumbers) ? data.keyNumbers : []);
-        setInsights(Array.isArray(data?.insights) ? data.insights.slice(-12) : []);
+        if (Array.isArray(data?.insights)) {
+          const deduped = new Map();
+          data.insights.forEach((insight) => {
+            const key =
+              String(insight?.metricKey || insight?.id || '')
+                .trim()
+                .toLowerCase() || '';
+            if (!key) return;
+            const existing = deduped.get(key);
+            const insightTime = Number(insight?.updatedAt || 0);
+            const existingTime = Number(existing?.updatedAt || 0);
+            if (!existing || insightTime >= existingTime) {
+              deduped.set(key, insight);
+            }
+          });
+          const nextInsights = Array.from(deduped.values())
+            .sort((a, b) => Number(b?.updatedAt || 0) - Number(a?.updatedAt || 0))
+            .slice(0, 12);
+          setInsights(nextInsights);
+        } else {
+          setInsights([]);
+        }
       } catch {
         // ignore transient network errors
       }
