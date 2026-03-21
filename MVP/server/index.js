@@ -16,6 +16,8 @@ const DEFAULT_SESSION_ID = 'default';
 const sessionStore = new Map();
 const ANALYSIS_COOLDOWN_MS = 3000;
 const INTERIM_DEBOUNCE_MS = 1200;
+const INSIGHT_ANALYSIS_COOLDOWN_MS = 15000;
+const INSIGHT_INTERIM_DEBOUNCE_MS = 4000;
 
 app.use((req, res, next) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -52,10 +54,12 @@ app.post('/session', (_req, res) => {
     analysisInFlight: false,
     insightAnalysisInFlight: false,
     analysisTimer: null,
+    insightAnalysisTimer: null,
     lastAnalyzedAt: 0,
     lastInsightAnalyzedAt: 0,
     pendingLatestText: '',
     pendingInsightLatestText: '',
+    pendingInsightTopic: 'unknown',
     insightMemory: {
       lastTopic: 'unknown',
       facts: [],
@@ -94,10 +98,12 @@ function getSession(sessionId) {
       analysisInFlight: false,
       insightAnalysisInFlight: false,
       analysisTimer: null,
+      insightAnalysisTimer: null,
       lastAnalyzedAt: 0,
       lastInsightAnalyzedAt: 0,
       pendingLatestText: '',
       pendingInsightLatestText: '',
+      pendingInsightTopic: 'unknown',
       insightMemory: {
         lastTopic: 'unknown',
         facts: [],
@@ -277,7 +283,18 @@ function mergeInsightMemory(session, topic, insightItems) {
 
 function upsertQualitativeInsightCard(session, topic, insight) {
   const title = String(insight?.title || '').trim();
-  const body = String(insight?.body || '').trim();
+  const rawBody = String(insight?.body || '').trim();
+  const topicText = String(topic || '').trim();
+  let body = rawBody;
+  if (topicText) {
+    const escaped = topicText.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    body = body.replace(new RegExp(escaped, 'ig'), '').replace(/\s{2,}/g, ' ').trim();
+  }
+  body = body
+    .replace(/^\[.*?\]\s*/g, '')
+    .replace(/^conversation is focused on\s*/i, '')
+    .replace(/^the topic is\s*/i, '')
+    .trim();
   const category = String(insight?.category || '').trim().toLowerCase();
   if (!title || !body || !category) return;
 
@@ -285,21 +302,35 @@ function upsertQualitativeInsightCard(session, topic, insight) {
   const now = Date.now();
   const insights = Array.isArray(session.insights) ? session.insights : [];
   const existingIndex = insights.findIndex((i) => i?.metricKey === metricKey);
+  const nextHighlights = Array.isArray(insight?.highlight)
+    ? insight.highlight.map((h) => String(h || '').trim()).filter(Boolean).slice(0, 4)
+    : [];
+  const existing = existingIndex >= 0 ? insights[existingIndex] : null;
+  const existingHighlights = Array.isArray(existing?.highlight)
+    ? existing.highlight.map((h) => String(h || '').trim())
+    : [];
+  const unchanged =
+    existing &&
+    String(existing.title || '').trim() === title &&
+    String(existing.body || '').trim() === body &&
+    String(existing.type || '').trim() === mapInsightCategoryToType(category) &&
+    JSON.stringify(existingHighlights) === JSON.stringify(nextHighlights);
+  if (unchanged) return false;
+
   const next = {
     id: existingIndex >= 0 ? insights[existingIndex].id : `${now}-${metricKey}`,
     metricKey,
     type: mapInsightCategoryToType(category),
     title: `${title}`,
     body,
-    highlight: Array.isArray(insight?.highlight)
-      ? insight.highlight.map((h) => String(h || '').trim()).filter(Boolean).slice(0, 4)
-      : [],
+    highlight: nextHighlights,
     updatedAt: now,
   };
   if (existingIndex >= 0) insights[existingIndex] = next;
   else insights.push(next);
   insights.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
   session.insights = insights.slice(0, 24);
+  return true;
 }
 
 async function analyzeWithContext({ sessionId, latestText }) {
@@ -472,7 +503,7 @@ async function analyzeInsightsWithContext({ sessionId, latestText, detectedTopic
             'You create concise qualitative insights for a live sales assistant.\n' +
             'Use detected topic as primary context.\n' +
             'Focus on facts, intentions, results, risks, obstacles, and next steps.\n' +
-            'Return 0-4 items only, each short and specific.\n' +
+            'Return 1 item only, each short and specific.\n' +
             'Do not return numeric metrics here.\n' +
             'Return strict JSON.',
         },
@@ -510,7 +541,7 @@ async function analyzeInsightsWithContext({ sessionId, latestText, detectedTopic
               : [],
           }))
           .filter((i) => i.category && i.title && i.body)
-          .slice(0, 4)
+          .slice(0, 1)
       : [];
     return insights.length > 0 ? insights : deriveHeuristicInsights(detectedTopic, latestText);
   } catch {
@@ -560,7 +591,7 @@ function deriveHeuristicInsights(detectedTopic, latestText) {
     });
   }
 
-  return insights.slice(0, 4);
+  return insights.slice(0, 1);
 }
 
 function deriveTopicHeuristic(text) {
@@ -587,9 +618,6 @@ function runMetricAnalysisNow(sessionId) {
   session.analysisInFlight = true;
   session.pendingLatestText = '';
   const ts = new Date().toISOString();
-
-  // Start qualitative analysis in parallel with metric analysis.
-  runInsightAnalysisNow(sessionId, session.topic);
 
   analyzeWithContext({ sessionId, latestText })
     .then(({ topic, keyNumbers }) => {
@@ -656,7 +684,7 @@ function runMetricAnalysisNow(sessionId) {
 
       const latestInsightText = s.pendingInsightLatestText || latestText;
       s.pendingInsightLatestText = latestInsightText;
-      runInsightAnalysisNow(sessionId, topic);
+      s.pendingInsightTopic = topic;
     })
     .catch((err) => {
       console.error(`[${ts}] [${sessionId}] [analysis:error] ${err.message}`);
@@ -685,12 +713,16 @@ function runInsightAnalysisNow(sessionId, detectedTopic) {
       s.lastInsightAnalyzedAt = Date.now();
       if (Array.isArray(insightItems) && insightItems.length > 0) {
         mergeInsightMemory(s, detectedTopic || s.topic, insightItems);
-        insightItems.forEach((insight) => upsertQualitativeInsightCard(s, detectedTopic || s.topic, insight));
-        console.log(
-          `[${ts}] [${sessionId}] [insights] ${insightItems
-            .map((i) => `${i.category}:${i.title}`)
-            .join(', ')}`
+        const changed = insightItems.filter((insight) =>
+          upsertQualitativeInsightCard(s, detectedTopic || s.topic, insight)
         );
+        if (changed.length > 0) {
+          console.log(
+            `[${ts}] [${sessionId}] [insights] ${changed
+              .map((i) => `${i.category}:${i.title}`)
+              .join(', ')}`
+          );
+        }
       }
     })
     .catch((err) => {
@@ -700,9 +732,38 @@ function runInsightAnalysisNow(sessionId, detectedTopic) {
       const s = getSession(sessionId);
       s.insightAnalysisInFlight = false;
       if (s.pendingInsightLatestText) {
-        runInsightAnalysisNow(sessionId, s.topic);
+        scheduleInsightAnalysis(sessionId, 'interim', s.pendingInsightTopic || s.topic);
       }
     });
+}
+
+function scheduleInsightAnalysis(sessionId, chunkType, detectedTopic) {
+  const session = getSession(sessionId);
+  if (typeof detectedTopic === 'string' && detectedTopic.trim()) {
+    session.pendingInsightTopic = detectedTopic.trim();
+  }
+
+  if (session.insightAnalysisTimer) {
+    clearTimeout(session.insightAnalysisTimer);
+    session.insightAnalysisTimer = null;
+  }
+
+  const now = Date.now();
+  const elapsed = now - (session.lastInsightAnalyzedAt || 0);
+  const cooldownWait = Math.max(0, INSIGHT_ANALYSIS_COOLDOWN_MS - elapsed);
+  const debounceWait = chunkType === 'final' ? 0 : INSIGHT_INTERIM_DEBOUNCE_MS;
+  const waitMs = Math.max(cooldownWait, debounceWait);
+
+  if (waitMs === 0) {
+    runInsightAnalysisNow(sessionId, session.pendingInsightTopic || session.topic);
+    return;
+  }
+
+  session.insightAnalysisTimer = setTimeout(() => {
+    const s = getSession(sessionId);
+    s.insightAnalysisTimer = null;
+    runInsightAnalysisNow(sessionId, s.pendingInsightTopic || s.topic);
+  }, waitMs);
 }
 
 function scheduleAnalysis(sessionId, chunkType) {
@@ -747,7 +808,10 @@ app.post('/transcript', (req, res) => {
   console.log(`[${ts}] [${normalizedSessionId}] [${normalizedType}] ${text}`);
   const session = getSession(normalizedSessionId);
   session.pendingLatestText = text.trim();
-  session.pendingInsightLatestText = text.trim();
+  if (normalizedType === 'final') {
+    session.pendingInsightLatestText = text.trim();
+    scheduleInsightAnalysis(normalizedSessionId, normalizedType, session.topic);
+  }
   scheduleAnalysis(normalizedSessionId, normalizedType);
 
   res.json({ ok: true, sessionId: normalizedSessionId });
@@ -760,6 +824,9 @@ app.post('/transcript/reset', (req, res) => {
   const existing = sessionStore.get(normalizedSessionId);
   if (existing?.analysisTimer) {
     clearTimeout(existing.analysisTimer);
+  }
+  if (existing?.insightAnalysisTimer) {
+    clearTimeout(existing.insightAnalysisTimer);
   }
   sessionStore.delete(normalizedSessionId);
   res.json({ ok: true, sessionId: normalizedSessionId });
