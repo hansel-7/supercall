@@ -9,9 +9,19 @@ export default function LiveSttView({
   onClear,
   lines,
   interim,
+  recordError,
+  onDismissRecordError,
 }) {
   return (
     <div className="flex flex-col h-full min-h-0 gap-4">
+      {recordError && (
+        <div className="flex items-start justify-between gap-2 rounded-lg border border-accent-red/30 bg-accent-red/10 px-3 py-2 text-[11px] text-red-200 flex-shrink-0">
+          <span>{recordError}</span>
+          <button type="button" onClick={onDismissRecordError} className="text-gray-400 hover:text-white shrink-0">
+            Dismiss
+          </button>
+        </div>
+      )}
       <div className="flex flex-wrap items-center gap-2 flex-shrink-0">
         {!listening ? (
           <button
@@ -50,6 +60,10 @@ export default function LiveSttView({
           <strong className="font-medium">Edge</strong> (Web Speech API).
         </p>
       )}
+
+      <p className="text-[10px] text-gray-500 flex-shrink-0">
+        When you stop, the recording is saved automatically as a <strong className="text-gray-400">.webm</strong> file.
+      </p>
 
       <div className="flex items-center gap-2 flex-shrink-0 px-0.5">
         <div

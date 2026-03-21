@@ -1,9 +1,29 @@
+import { useCallback, useState } from 'react';
 import { Phone } from 'lucide-react';
 import LiveSttView from './components/LiveSttView';
+import { useAudioRecorder } from './hooks/useAudioRecorder';
 import { useSpeechRecognition } from './hooks/useSpeechRecognition';
 
 export default function App() {
+  const [recordError, setRecordError] = useState(null);
   const { supported, listening, lines, interim, start, stop, clearLines } = useSpeechRecognition();
+  const { start: startRecorder, stop: stopRecorder } = useAudioRecorder();
+
+  const handleStart = useCallback(async () => {
+    setRecordError(null);
+    try {
+      await startRecorder();
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      setRecordError(`Could not start recording: ${msg}`);
+    }
+    start();
+  }, [startRecorder, start]);
+
+  const handleStop = useCallback(() => {
+    stop();
+    stopRecorder();
+  }, [stop, stopRecorder]);
 
   return (
     <div className="h-screen w-screen overflow-hidden bg-surface-900 flex flex-col">
@@ -15,7 +35,7 @@ export default function App() {
           <span className="text-sm font-semibold text-white tracking-tight">SuperCall</span>
           <span className="text-[10px] bg-white/10 text-gray-400 px-2 py-0.5 rounded-full font-medium">MVP</span>
         </div>
-        <p className="text-[11px] text-gray-500 hidden sm:block">Live speech-to-text</p>
+        <p className="text-[11px] text-gray-500 hidden sm:block">Live speech-to-text · auto-save audio</p>
       </header>
 
       <main className="flex-1 min-h-0 p-3">
@@ -23,11 +43,13 @@ export default function App() {
           <LiveSttView
             supported={supported}
             listening={listening}
-            onStart={start}
-            onStop={stop}
+            onStart={handleStart}
+            onStop={handleStop}
             onClear={clearLines}
             lines={lines}
             interim={interim}
+            recordError={recordError}
+            onDismissRecordError={() => setRecordError(null)}
           />
         </div>
       </main>
