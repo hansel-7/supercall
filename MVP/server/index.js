@@ -286,14 +286,18 @@ function upsertQualitativeInsightCard(session, topic, insight) {
   const rawBody = String(insight?.body || '').trim();
   const topicText = String(topic || '').trim();
   let body = rawBody;
+  // 1) Strip bracketed tags first so later replacements do not leave dangling symbols.
+  body = body.replace(/\[[^\]]*\]\s*/g, ' ');
   if (topicText) {
     const escaped = topicText.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    body = body.replace(new RegExp(escaped, 'ig'), '').replace(/\s{2,}/g, ' ').trim();
+    body = body.replace(new RegExp(escaped, 'ig'), ' ');
   }
   body = body
-    .replace(/^\[.*?\]\s*/g, '')
+    .replace(/^[\]\[]+\s*/g, '')
+    .replace(/\s*[\]\[]+\s*/g, ' ')
     .replace(/^conversation is focused on\s*/i, '')
     .replace(/^the topic is\s*/i, '')
+    .replace(/\s{2,}/g, ' ')
     .trim();
   const category = String(insight?.category || '').trim().toLowerCase();
   if (!title || !body || !category) return;
@@ -550,7 +554,6 @@ async function analyzeInsightsWithContext({ sessionId, latestText, detectedTopic
 }
 
 function deriveHeuristicInsights(detectedTopic, latestText) {
-  const topic = String(detectedTopic || 'unknown').trim() || 'unknown';
   const text = String(latestText || '').trim();
   if (!text) return [];
   const lower = text.toLowerCase();
@@ -559,8 +562,8 @@ function deriveHeuristicInsights(detectedTopic, latestText) {
     {
       category: 'fact',
       title: 'Current discussion point',
-      body: `Conversation is focused on ${topic}.`,
-      highlight: [topic],
+      body: 'Client shared a concrete discussion point.',
+      highlight: [],
     },
   ];
 

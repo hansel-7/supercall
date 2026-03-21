@@ -4,6 +4,15 @@ import AIAssistantPanel from './components/AIAssistantPanel';
 import CallScreenMvp from './components/CallScreenMvp';
 import { useSpeechRecognition } from './hooks/useSpeechRecognition';
 
+function sanitizeInsightText(value) {
+  return String(value || '')
+    .replace(/\[[^\]]*\]\s*/g, ' ')
+    .replace(/^[\]\[]+\s*/g, '')
+    .replace(/\s*[\]\[]+\s*/g, ' ')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+}
+
 export default function App() {
   const { supported, listening, lines, interim, start, stop, clearLines } = useSpeechRecognition();
   const sentLineCountRef = useRef(0);
@@ -132,6 +141,11 @@ export default function App() {
             });
           const nextInsights = Array.from(deduped.values())
             .sort((a, b) => Number(a?.updatedAt || 0) - Number(b?.updatedAt || 0))
+            .map((insight) => ({
+              ...insight,
+              title: sanitizeInsightText(insight?.title),
+              body: sanitizeInsightText(insight?.body),
+            }))
             .slice(0, 12);
           setInsights(nextInsights);
         } else {
