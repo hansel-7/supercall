@@ -102,10 +102,12 @@ export function useCallSimulation(getStepDuration) {
       setTranscript((t) => [...t, { speaker: step.speaker, name: step.name, text: step.text }]);
       setSentimentHistory((prev) => computeSentiment(step, prev));
 
-      // Delayed: fire insights only after ~85% of the audio has played
-      // This ensures the speaker has said the relevant words before the AI "reacts"
+      // Insight timing is different per speaker:
+      // - VC turn (Sarah speaking): fire at 65% so Alex sees talking points while Sarah finishes
+      // - Founder turn (Alex speaking): fire at 90% as confirmation after he's said it
       if (insightTimerRef.current) clearTimeout(insightTimerRef.current);
-      const insightDelay = Math.max(500, stepDuration * 0.85);
+      const insightRatio = step.speaker === 'vc' ? 0.65 : 0.90;
+      const insightDelay = Math.max(500, stepDuration * insightRatio);
       insightTimerRef.current = setTimeout(() => {
         fireInsightsForStep(step);
       }, insightDelay);

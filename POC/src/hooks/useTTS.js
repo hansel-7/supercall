@@ -3,6 +3,7 @@ import { callScript } from '../data/callScript';
 import { fetchSpeech } from '../lib/tts';
 
 const API_KEY = import.meta.env.VITE_OPENAI_API_KEY;
+const PLAYBACK_RATE = 1.3;
 
 function measureDurationMs(blobUrl) {
   return new Promise((resolve) => {
@@ -77,9 +78,10 @@ export function useTTS() {
     }
   }, []);
 
-  /** Returns measured audio duration in ms for a step, or null if unknown. */
+  /** Returns effective playback duration in ms (adjusted for playback rate). */
   const getDuration = useCallback((stepIndex) => {
-    return durationsRef.current[stepIndex] ?? null;
+    const raw = durationsRef.current[stepIndex];
+    return raw != null ? Math.round(raw / PLAYBACK_RATE) : null;
   }, []);
 
   const playStep = useCallback((stepIndex) => {
@@ -93,6 +95,7 @@ export function useTTS() {
     if (!url) return;
 
     const audio = new Audio(url);
+    audio.playbackRate = PLAYBACK_RATE;
     currentAudioRef.current = audio;
     audio.play().catch((err) => console.warn('Audio playback blocked:', err.message));
   }, []);

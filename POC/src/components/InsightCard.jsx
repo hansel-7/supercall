@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion';
-import { TrendingUp, AlertTriangle, Lightbulb, History } from 'lucide-react';
+import { TrendingUp, AlertTriangle, Lightbulb, History, MessageCircle } from 'lucide-react';
 
 const typeConfig = {
   metric: {
@@ -33,6 +33,14 @@ const typeConfig = {
     iconColor: 'text-purple-400',
     badge: 'bg-purple-500/20 text-purple-300',
     label: 'Context',
+  },
+  talking_point: {
+    icon: MessageCircle,
+    bg: 'bg-cyan-500/15',
+    border: 'border-cyan-400/40',
+    iconColor: 'text-cyan-400',
+    badge: 'bg-cyan-500/25 text-cyan-300',
+    label: 'Talking Point',
   },
 };
 

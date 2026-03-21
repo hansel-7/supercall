@@ -5,7 +5,7 @@ export const callScript = [
     name: 'Sarah Chen',
     text: "Alex, great to reconnect. It's been about three weeks since our last call. I've been reviewing the materials you sent over.",
     durationMs: 4000,
-    triggers: ['context-prev-call'],
+    triggers: ['context-prev-call', 'tp-growth-update'],
   },
   {
     id: 2,
@@ -21,7 +21,7 @@ export const callScript = [
     name: 'Sarah Chen',
     text: "Let's dive in. Last time we talked, your ARR was at $1.8 million. Where are things standing now?",
     durationMs: 3500,
-    triggers: ['context-arr-prev'],
+    triggers: ['context-arr-prev', 'tp-arr-answer'],
   },
   {
     id: 4,
@@ -29,7 +29,7 @@ export const callScript = [
     name: 'Alex Rivera',
     text: "We've grown to $2.4 million ARR. That's a 33% increase in just three weeks, driven largely by two new enterprise contracts we closed.",
     durationMs: 4000,
-    triggers: ['metric-arr-current', 'metric-arr-growth'],
+    triggers: [],
   },
   {
     id: 5,
@@ -37,7 +37,7 @@ export const callScript = [
     name: 'Sarah Chen',
     text: "That's impressive growth. Can you break down the revenue mix? How much is coming from enterprise versus SMB?",
     durationMs: 3500,
-    triggers: ['suggestion-revenue-mix'],
+    triggers: ['tp-revenue-mix'],
   },
   {
     id: 6,
@@ -45,7 +45,7 @@ export const callScript = [
     name: 'Alex Rivera',
     text: "About 60% enterprise, 40% SMB now. The enterprise segment is growing faster — our average contract value went from $45K to $72K this quarter.",
     durationMs: 4000,
-    triggers: ['metric-acv'],
+    triggers: [],
   },
   {
     id: 7,
@@ -53,7 +53,7 @@ export const callScript = [
     name: 'Sarah Chen',
     text: "Good. Now, one thing that came up in our partner meeting — your burn rate. Last time it was around $280K monthly. Has that changed?",
     durationMs: 4000,
-    triggers: ['alert-burn-rate'],
+    triggers: ['alert-burn-rate', 'tp-burn-defense'],
   },
   {
     id: 8,
@@ -61,7 +61,7 @@ export const callScript = [
     name: 'Alex Rivera',
     text: "It's gone up slightly to $310K, but that's deliberate. We hired three senior engineers to accelerate our enterprise platform features.",
     durationMs: 4000,
-    triggers: ['metric-burn-rate', 'suggestion-justify-burn'],
+    triggers: [],
   },
   {
     id: 9,
@@ -69,7 +69,7 @@ export const callScript = [
     name: 'Sarah Chen',
     text: "What's your current runway looking like with that burn rate?",
     durationMs: 3000,
-    triggers: [],
+    triggers: ['tp-runway-answer'],
   },
   {
     id: 10,
@@ -77,7 +77,7 @@ export const callScript = [
     name: 'Alex Rivera',
     text: "We have about 14 months of runway remaining. But with the Series A, we'd extend that to 24+ months while doubling the team.",
     durationMs: 3500,
-    triggers: ['metric-runway'],
+    triggers: [],
   },
   {
     id: 11,
@@ -85,7 +85,7 @@ export const callScript = [
     name: 'Sarah Chen',
     text: "Let's talk about the competitive landscape. We've been hearing a lot about FinFlow launching a similar product. How do you see that?",
     durationMs: 4000,
-    triggers: ['alert-competition'],
+    triggers: ['alert-competition', 'tp-competitive-moat'],
   },
   {
     id: 12,
@@ -101,7 +101,7 @@ export const callScript = [
     name: 'Sarah Chen',
     text: "That regulatory angle is interesting. What's the retention looking like? Are customers sticking around?",
     durationMs: 3500,
-    triggers: [],
+    triggers: ['tp-retention-answer'],
   },
   {
     id: 14,
@@ -109,7 +109,7 @@ export const callScript = [
     name: 'Alex Rivera',
     text: "Net revenue retention is at 127%. Gross retention is 94%. Churn is almost exclusively in the SMB segment — enterprise has been zero churn for the last two quarters.",
     durationMs: 4500,
-    triggers: ['metric-nrr', 'metric-retention'],
+    triggers: [],
   },
   {
     id: 15,
@@ -117,7 +117,7 @@ export const callScript = [
     name: 'Sarah Chen',
     text: "127% NRR is strong. That tells me expansion revenue is working. What's driving the upsells?",
     durationMs: 3500,
-    triggers: ['context-nrr-benchmark'],
+    triggers: ['context-nrr-benchmark', 'tp-upsell-drivers'],
   },
   {
     id: 16,
@@ -133,7 +133,7 @@ export const callScript = [
     name: 'Sarah Chen',
     text: "I want to talk about the team. Last time you mentioned you were looking for a VP of Engineering. Any progress there?",
     durationMs: 3500,
-    triggers: ['context-vpe-search'],
+    triggers: ['context-vpe-search', 'tp-vpe-hire'],
   },
   {
     id: 18,
@@ -141,7 +141,7 @@ export const callScript = [
     name: 'Alex Rivera',
     text: "Yes — we've extended an offer to David Park. He was previously at Stripe leading their infrastructure team for four years. He starts in two weeks.",
     durationMs: 4000,
-    triggers: ['metric-key-hire', 'suggestion-team-strength'],
+    triggers: ['suggestion-team-strength'],
   },
   {
     id: 19,
@@ -149,7 +149,7 @@ export const callScript = [
     name: 'Sarah Chen',
     text: "David Park from Stripe? That's a great hire. Our partners will be impressed. Now, let's discuss valuation expectations for this round.",
     durationMs: 4000,
-    triggers: ['alert-valuation-discussion'],
+    triggers: ['alert-valuation-discussion', 'tp-valuation-pitch'],
   },
   {
     id: 20,
@@ -157,7 +157,7 @@ export const callScript = [
     name: 'Alex Rivera',
     text: "We're looking at a $30 million pre-money valuation for a $8 million Series A. That puts us at roughly 12.5x forward ARR based on our projections.",
     durationMs: 4500,
-    triggers: ['metric-valuation', 'context-valuation-prev'],
+    triggers: ['context-valuation-prev'],
   },
   {
     id: 21,
@@ -165,7 +165,7 @@ export const callScript = [
     name: 'Sarah Chen',
     text: "12.5x is on the higher end for fintech at this stage. What gives you confidence in those forward projections?",
     durationMs: 3500,
-    triggers: ['alert-valuation-pushback'],
+    triggers: ['alert-valuation-pushback', 'tp-valuation-defend'],
   },
   {
     id: 22,
@@ -173,7 +173,7 @@ export const callScript = [
     name: 'Alex Rivera',
     text: "We have a signed pipeline of $1.2 million that converts within the next 90 days, plus LOIs from three Fortune 500 companies exploring our compliance platform.",
     durationMs: 4500,
-    triggers: ['metric-pipeline', 'suggestion-social-proof'],
+    triggers: ['suggestion-social-proof'],
   },
   {
     id: 23,
@@ -181,7 +181,7 @@ export const callScript = [
     name: 'Sarah Chen',
     text: "The Fortune 500 LOIs are compelling. Can you share which companies, or is that under NDA?",
     durationMs: 3000,
-    triggers: [],
+    triggers: ['tp-nda-response'],
   },
   {
     id: 24,
@@ -189,7 +189,7 @@ export const callScript = [
     name: 'Alex Rivera',
     text: "Two are under NDA, but I can share that one is a top-5 US bank. We're in their vendor approval process now, expecting final sign-off next month.",
     durationMs: 4000,
-    triggers: ['metric-enterprise-pipeline'],
+    triggers: [],
   },
   {
     id: 25,
@@ -197,7 +197,7 @@ export const callScript = [
     name: 'Sarah Chen',
     text: "That would be a landmark deal. What about use of funds? If we write this check, where does the $8 million go?",
     durationMs: 3500,
-    triggers: [],
+    triggers: ['tp-use-of-funds'],
   },
   {
     id: 26,
@@ -205,7 +205,7 @@ export const callScript = [
     name: 'Alex Rivera',
     text: "Roughly 50% on engineering — building out the enterprise platform and SOC 2 compliance. 30% on sales, expanding our enterprise team to 8 reps. 20% on operations and infrastructure.",
     durationMs: 4500,
-    triggers: ['metric-use-of-funds'],
+    triggers: [],
   },
   {
     id: 27,
@@ -213,7 +213,7 @@ export const callScript = [
     name: 'Sarah Chen',
     text: "That allocation makes sense. I should tell you — I'm presenting NovaPay to our investment committee next Tuesday. I'm cautiously optimistic.",
     durationMs: 4000,
-    triggers: ['alert-ic-meeting', 'suggestion-follow-up-materials'],
+    triggers: ['alert-ic-meeting', 'tp-ic-offer'],
   },
   {
     id: 28,
