@@ -26,24 +26,25 @@ export default function App() {
 
   const handleStart = useCallback(async () => {
     resetUiState();
-    try {
-      const response = await fetch(`${serverUrl}/session`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-      });
-      if (response.ok) {
+    // Start microphone capture immediately in direct user gesture context.
+    start();
+    fetch(`${serverUrl}/session`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+    })
+      .then(async (response) => {
+        if (!response.ok) return;
         const data = await response.json();
         if (typeof data?.sessionId === 'string' && data.sessionId.trim()) {
           const sessionId = data.sessionId.trim();
           sessionIdRef.current = sessionId;
           setActiveSessionId(sessionId);
         }
-      }
-    } catch {
-      sessionIdRef.current = 'default';
-      setActiveSessionId('default');
-    }
-    start();
+      })
+      .catch(() => {
+        sessionIdRef.current = 'default';
+        setActiveSessionId('default');
+      });
   }, [resetUiState, serverUrl, start]);
 
   const handleClear = useCallback(() => {
