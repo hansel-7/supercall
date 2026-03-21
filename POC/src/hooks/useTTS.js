@@ -4,6 +4,28 @@ import { fetchSpeech } from '../lib/tts';
 
 const API_KEY = import.meta.env.VITE_OPENAI_API_KEY;
 
+function measureDurationMs(blobUrl) {
+  return new Promise((resolve) => {
+    const audio = new Audio();
+    audio.preload = 'metadata';
+
+    const cleanup = () => { audio.src = ''; };
+
+    audio.addEventListener('loadedmetadata', () => {
+      const ms = Number.isFinite(audio.duration) ? Math.round(audio.duration * 1000) : null;
+      cleanup();
+      resolve(ms);
+    }, { once: true });
+
+    audio.addEventListener('error', () => { cleanup(); resolve(null); }, { once: true });
+
+    // Safety timeout — blob URLs should resolve instantly
+    setTimeout(() => { cleanup(); resolve(null); }, 3000);
+
+    audio.src = blobUrl;
+  });
+}
+
 export function useTTS() {
   const [isLoading, setIsLoading] = useState(false);
   const [progress, setProgress] = useState(0);
@@ -11,6 +33,7 @@ export function useTTS() {
   const [error, setError] = useState(null);
 
   const audioUrlsRef = useRef([]);
+  const durationsRef = useRef([]);        // duration in ms for each step
   const currentAudioRef = useRef(null);
 
   const preload = useCallback(async () => {
@@ -24,16 +47,19 @@ export function useTTS() {
     setError(null);
 
     const urls = new Array(callScript.length).fill(null);
+    const durations = new Array(callScript.length).fill(null);
     let completed = 0;
 
     try {
       await Promise.all(
         callScript.map(async (step, idx) => {
           try {
-            urls[idx] = await fetchSpeech(step.text, step.speaker, API_KEY);
+            const url = await fetchSpeech(step.text, step.speaker, API_KEY);
+            urls[idx] = url;
+            // Measure real playback duration for this clip
+            durations[idx] = await measureDurationMs(url);
           } catch (err) {
-            // Log but don't abort — step will play silently
-            console.warn(`TTS failed for step ${idx} (${step.speaker}):`, err.message);
+            console.warn(`TTS failed for step ${idx}:`, err.message);
           } finally {
             completed += 1;
             setProgress(Math.round((completed / callScript.length) * 100));
@@ -42,6 +68,7 @@ export function useTTS() {
       );
 
       audioUrlsRef.current = urls;
+      durationsRef.current = durations;
       setIsReady(true);
     } catch (err) {
       setError(err.message);
@@ -50,8 +77,12 @@ export function useTTS() {
     }
   }, []);
 
+  /** Returns measured audio duration in ms for a step, or null if unknown. */
+  const getDuration = useCallback((stepIndex) => {
+    return durationsRef.current[stepIndex] ?? null;
+  }, []);
+
   const playStep = useCallback((stepIndex) => {
-    // Stop anything currently playing
     if (currentAudioRef.current) {
       currentAudioRef.current.pause();
       currentAudioRef.current.src = '';
@@ -74,15 +105,15 @@ export function useTTS() {
     }
   }, []);
 
-  // Full reset — revokes blob URLs and clears state so preload can run again
   const reset = useCallback(() => {
     stopAll();
     audioUrlsRef.current.forEach((url) => url && URL.revokeObjectURL(url));
     audioUrlsRef.current = [];
+    durationsRef.current = [];
     setIsReady(false);
     setProgress(0);
     setError(null);
   }, [stopAll]);
 
-  return { isLoading, progress, isReady, error, preload, playStep, stopAll, reset };
+  return { isLoading, progress, isReady, error, preload, getDuration, playStep, stopAll, reset };
 }

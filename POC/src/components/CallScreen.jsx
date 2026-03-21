@@ -11,6 +11,7 @@ export default function CallScreen({
   isComplete,
   currentIndex,
   ttsLoading,
+  currentStepDurationMs,
   onPlay,
   onPause,
   onRestart,
@@ -42,7 +43,7 @@ export default function CallScreen({
           </span>
         </div>
         <div className="h-[calc(100%-2rem)] overflow-hidden">
-          <LiveTranscript transcript={transcript} />
+          <LiveTranscript transcript={transcript} currentStepDurationMs={currentStepDurationMs} />
         </div>
       </div>
 

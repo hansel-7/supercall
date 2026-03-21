@@ -6,32 +6,32 @@ import { useCallSimulation } from './hooks/useCallSimulation';
 import { useTTS } from './hooks/useTTS';
 
 export default function App() {
-  const sim = useCallSimulation();
   const tts = useTTS();
 
-  // Set when "Start Call" is clicked before TTS is ready — auto-starts the call once preload finishes
+  // Pass real audio durations into the simulation so it advances only when audio finishes
+  const sim = useCallSimulation(tts.isReady ? tts.getDuration : null);
+
+  // Set when "Start Call" is clicked before TTS is ready — auto-starts once preload finishes
   const pendingStartRef = useRef(false);
 
-  // Auto-start the simulation once audio is pre-fetched
+  // Auto-start the simulation the moment all audio is ready
   useEffect(() => {
     if (tts.isReady && pendingStartRef.current) {
       pendingStartRef.current = false;
       sim.play();
     }
-  // sim.play is stable (useCallback with no deps)
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tts.isReady]);
 
-  // Play the corresponding audio clip whenever the simulation advances to a new step
+  // Play the pre-fetched audio clip for each new step
   useEffect(() => {
     if (sim.currentIndex >= 0 && tts.isReady) {
       tts.playStep(sim.currentIndex);
     }
-  // Only re-run when the step index changes
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sim.currentIndex]);
 
-  // Stop audio when the simulation is paused or ends
+  // Stop audio when paused or ended
   useEffect(() => {
     if (!sim.isPlaying) {
       tts.stopAll();
@@ -41,9 +41,7 @@ export default function App() {
 
   const handleStartCall = useCallback(() => {
     if (tts.isLoading) return;
-
     if (!tts.isReady) {
-      // Kick off pre-fetch; simulation will auto-start via the isReady effect
       pendingStartRef.current = true;
       tts.preload();
     } else {
@@ -53,15 +51,15 @@ export default function App() {
 
   const handlePause = useCallback(() => {
     sim.pause();
-    // stopAll is triggered via the isPlaying effect above
   }, [sim]);
 
   const handleRestart = useCallback(() => {
     tts.stopAll();
     sim.restart();
-    // Keep audio URLs — no need to refetch for subsequent demos
-    // Clicking "Start Call" again will call sim.play() directly since tts.isReady stays true
   }, [tts, sim]);
+
+  // Duration of the currently-playing step (in ms) — used to sync word reveal speed
+  const currentStepDurationMs = tts.isReady ? tts.getDuration(sim.currentIndex) : null;
 
   return (
     <div className="h-screen w-screen overflow-hidden bg-surface-900 flex flex-col relative">
@@ -93,6 +91,7 @@ export default function App() {
             isComplete={sim.isComplete}
             currentIndex={sim.currentIndex}
             ttsLoading={tts.isLoading}
+            currentStepDurationMs={currentStepDurationMs}
             onPlay={handleStartCall}
             onPause={handlePause}
             onRestart={handleRestart}
@@ -109,7 +108,7 @@ export default function App() {
         </div>
       </main>
 
-      {/* TTS loading overlay — shown while pre-fetching audio */}
+      {/* TTS pre-fetch loading overlay */}
       {tts.isLoading && (
         <div className="absolute inset-0 bg-surface-900/95 backdrop-blur-sm flex flex-col items-center justify-center z-50 gap-6">
           <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-violet-500 to-indigo-600 flex items-center justify-center shadow-2xl shadow-violet-500/30">
@@ -117,9 +116,7 @@ export default function App() {
           </div>
           <div className="text-center">
             <p className="text-white font-semibold text-lg">Synthesizing voices...</p>
-            <p className="text-gray-400 text-sm mt-1">
-              Generating audio with GPT-4o mini TTS
-            </p>
+            <p className="text-gray-400 text-sm mt-1">Generating audio with GPT-4o mini TTS</p>
           </div>
           <div className="w-72 space-y-2">
             <div className="flex items-center justify-between text-xs">
@@ -147,7 +144,6 @@ export default function App() {
         </div>
       )}
 
-      {/* TTS error banner */}
       {tts.error && (
         <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-3 bg-red-500/10 border border-red-500/30 text-red-300 rounded-xl px-4 py-3 z-50 max-w-md">
           <AlertCircle className="w-4 h-4 flex-shrink-0" />

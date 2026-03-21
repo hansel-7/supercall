@@ -6,9 +6,19 @@ const speakerStyles = {
   founder: { label: 'Alex (Founder)', color: 'text-emerald-400', dot: 'bg-emerald-400' },
 };
 
-// Reveals text word by word; once complete, stays static.
-function WordReveal({ text, isActive, wordIntervalMs = 115 }) {
+/**
+ * Reveals text word by word.
+ * When durationMs is provided, word interval is calculated from actual audio length.
+ * Falls back to a fixed interval if duration is unknown.
+ */
+function WordReveal({ text, isActive, durationMs }) {
   const words = text.split(' ');
+
+  // Derive word interval from actual audio duration, clamped to readable range
+  const wordIntervalMs = durationMs
+    ? Math.max(60, Math.min(300, Math.floor(durationMs / words.length)))
+    : 120;
+
   const [visibleCount, setVisibleCount] = useState(isActive ? 0 : words.length);
   const intervalRef = useRef(null);
 
@@ -23,13 +33,11 @@ function WordReveal({ text, isActive, wordIntervalMs = 115 }) {
     intervalRef.current = setInterval(() => {
       count += 1;
       setVisibleCount(count);
-      if (count >= words.length) {
-        clearInterval(intervalRef.current);
-      }
+      if (count >= words.length) clearInterval(intervalRef.current);
     }, wordIntervalMs);
 
     return () => clearInterval(intervalRef.current);
-  // Only re-run when the text itself changes (new entry becomes active)
+  // Re-run when the text changes (new entry becomes the active one)
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [text, isActive]);
 
@@ -46,7 +54,7 @@ function WordReveal({ text, isActive, wordIntervalMs = 115 }) {
   );
 }
 
-export default function LiveTranscript({ transcript }) {
+export default function LiveTranscript({ transcript, currentStepDurationMs }) {
   const scrollRef = useRef(null);
 
   useEffect(() => {
@@ -82,7 +90,7 @@ export default function LiveTranscript({ transcript }) {
               <WordReveal
                 text={entry.text}
                 isActive={isLatest}
-                wordIntervalMs={115}
+                durationMs={isLatest ? currentStepDurationMs : null}
               />
             </p>
           </div>
