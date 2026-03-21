@@ -1,5 +1,5 @@
 const VOICES = {
-  vc: 'nova',
+  vc: 'sage',
   founder: 'onyx',
 };
 
