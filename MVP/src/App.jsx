@@ -15,7 +15,17 @@ export default function App() {
   const [keyNumbers, setKeyNumbers] = useState([]);
   const [insights, setInsights] = useState([]);
 
+  const resetUiState = useCallback(() => {
+    clearLines();
+    sentLineCountRef.current = 0;
+    lastInterimRef.current = '';
+    setTopic('unknown');
+    setKeyNumbers([]);
+    setInsights([]);
+  }, [clearLines]);
+
   const handleStart = useCallback(async () => {
+    resetUiState();
     try {
       const response = await fetch(`${serverUrl}/session`, {
         method: 'POST',
@@ -27,9 +37,6 @@ export default function App() {
           const sessionId = data.sessionId.trim();
           sessionIdRef.current = sessionId;
           setActiveSessionId(sessionId);
-          setTopic('unknown');
-          setKeyNumbers([]);
-          setInsights([]);
         }
       }
     } catch {
@@ -37,20 +44,16 @@ export default function App() {
       setActiveSessionId('default');
     }
     start();
-  }, [serverUrl, start]);
+  }, [resetUiState, serverUrl, start]);
 
   const handleClear = useCallback(() => {
-    clearLines();
-    sentLineCountRef.current = 0;
-    setTopic('unknown');
-    setKeyNumbers([]);
-    setInsights([]);
+    resetUiState();
     fetch(`${serverUrl}/transcript/reset`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ sessionId: sessionIdRef.current }),
     }).catch(() => {});
-  }, [clearLines, serverUrl]);
+  }, [resetUiState, serverUrl]);
 
   useEffect(() => {
     if (lines.length < sentLineCountRef.current) {
@@ -103,28 +106,8 @@ export default function App() {
         if (cancelled) return;
         setTopic(typeof data?.topic === 'string' && data.topic.trim() ? data.topic.trim() : 'unknown');
         setKeyNumbers(Array.isArray(data?.keyNumbers) ? data.keyNumbers : []);
-        if (Array.isArray(data?.insights)) {
-          const deduped = new Map();
-          data.insights.forEach((insight) => {
-            const key =
-              String(insight?.metricKey || insight?.id || '')
-                .trim()
-                .toLowerCase() || '';
-            if (!key) return;
-            const existing = deduped.get(key);
-            const insightTime = Number(insight?.updatedAt || 0);
-            const existingTime = Number(existing?.updatedAt || 0);
-            if (!existing || insightTime >= existingTime) {
-              deduped.set(key, insight);
-            }
-          });
-          const nextInsights = Array.from(deduped.values())
-            .sort((a, b) => Number(b?.updatedAt || 0) - Number(a?.updatedAt || 0))
-            .slice(0, 12);
-          setInsights(nextInsights);
-        } else {
-          setInsights([]);
-        }
+        // Temporarily disable Live Insights rendering.
+        setInsights([]);
       } catch {
         // ignore transient network errors
       }
