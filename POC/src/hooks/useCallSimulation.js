@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { callScript } from '../data/callScript';
 import { insights } from '../data/insights';
 
-const TICK_INTERVAL = 2000;
+const TICK_INTERVAL = 2500;
 
 export function useCallSimulation() {
   const [currentIndex, setCurrentIndex] = useState(-1);

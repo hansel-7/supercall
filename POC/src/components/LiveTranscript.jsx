@@ -7,7 +7,7 @@ const speakerStyles = {
 };
 
 // Reveals text word by word; once complete, stays static.
-function WordReveal({ text, isActive, wordIntervalMs = 95 }) {
+function WordReveal({ text, isActive, wordIntervalMs = 115 }) {
   const words = text.split(' ');
   const [visibleCount, setVisibleCount] = useState(isActive ? 0 : words.length);
   const intervalRef = useRef(null);
@@ -82,7 +82,7 @@ export default function LiveTranscript({ transcript }) {
               <WordReveal
                 text={entry.text}
                 isActive={isLatest}
-                wordIntervalMs={95}
+                wordIntervalMs={115}
               />
             </p>
           </div>
