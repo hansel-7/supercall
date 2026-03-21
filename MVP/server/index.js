@@ -1,10 +1,16 @@
 import express from 'express';
-import 'dotenv/config';
+import dotenv from 'dotenv';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import { randomUUID } from 'crypto';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+dotenv.config({ path: path.join(__dirname, '.env') });
 
 const app = express();
 const PORT = Number(process.env.PORT) || 3001;
-const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+const OPENAI_API_KEY = String(process.env.OPENAI_API_KEY || '').trim();
 const MAX_CONTEXT_LINES = 120;
 const DEFAULT_SESSION_ID = 'default';
 const sessionStore = new Map();
