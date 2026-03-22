@@ -14,8 +14,25 @@ function sanitizeInsightText(value) {
     .trim();
 }
 
+function deriveMetricsFromKeyNumbers(keyNumbers) {
+  const byLabel = new Map();
+  keyNumbers.forEach((k) => {
+    const normalizedLabel = String(k?.label || '')
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, ' ')
+      .trim();
+    if (!normalizedLabel) return;
+    byLabel.set(normalizedLabel, {
+      key: `num-${normalizedLabel}`,
+      label: String(k.label || '').trim(),
+      current: String(k.value || '').trim(),
+    });
+  });
+  return Array.from(byLabel.values()).filter((m) => m.current);
+}
+
 export default function App() {
-  const { supported, listening, lines, interim, start, stop, clearLines } = useSpeechRecognition();
+  const { supported, listening, lines, interim, start, clearLines, setCaptureEnabled } = useSpeechRecognition();
   const sentLineCountRef = useRef(0);
   const lastInterimRef = useRef('');
   const serverUrl = import.meta.env.VITE_SERVER_URL || 'http://localhost:3001';
@@ -29,6 +46,9 @@ export default function App() {
   const [showSummaryModal, setShowSummaryModal] = useState(false);
   const [callStartedAt, setCallStartedAt] = useState(null);
   const [callEndedAt, setCallEndedAt] = useState(null);
+  const [callActive, setCallActive] = useState(false);
+  const [summaryInsights, setSummaryInsights] = useState([]);
+  const [summaryMetrics, setSummaryMetrics] = useState([]);
 
   const resetUiState = useCallback(() => {
     clearLines();
@@ -42,11 +62,18 @@ export default function App() {
 
   const handleStart = useCallback(async () => {
     setShowSummaryModal(false);
+    setSummaryInsights([]);
+    setSummaryMetrics([]);
     setCallStartedAt(new Date().toISOString());
     setCallEndedAt(null);
+    setCallActive(true);
     resetUiState();
-    // Start microphone capture immediately in direct user gesture context.
-    start();
+    // Keep the recognition engine running; start if it is not active yet.
+    if (!listening) {
+      start();
+    } else {
+      setCaptureEnabled(true);
+    }
     fetch(`${serverUrl}/session`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -66,7 +93,7 @@ export default function App() {
         setSessionReady(true);
         setActiveSessionId('default');
       });
-  }, [resetUiState, serverUrl, start]);
+  }, [listening, resetUiState, serverUrl, setCaptureEnabled, start]);
 
   const handleClear = useCallback(() => {
     setShowSummaryModal(false);
@@ -79,13 +106,22 @@ export default function App() {
   }, [resetUiState, serverUrl]);
 
   const handleStop = useCallback(() => {
-    stop();
+    setSummaryInsights(insights);
+    setSummaryMetrics(deriveMetricsFromKeyNumbers(keyNumbers));
+    setCaptureEnabled(false);
+    resetUiState();
+    setCallActive(false);
     setCallEndedAt(new Date().toISOString());
     setShowSummaryModal(true);
-  }, [stop]);
+    fetch(`${serverUrl}/transcript/reset`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sessionId: sessionIdRef.current }),
+    }).catch(() => {});
+  }, [insights, keyNumbers, resetUiState, serverUrl, setCaptureEnabled]);
 
   useEffect(() => {
-    if (!sessionReady) return;
+    if (!sessionReady || !callActive) return;
     if (lines.length < sentLineCountRef.current) {
       sentLineCountRef.current = 0;
     }
@@ -106,10 +142,10 @@ export default function App() {
         }),
       }).catch(() => {});
     });
-  }, [lines, serverUrl, sessionReady]);
+  }, [callActive, lines, serverUrl, sessionReady]);
 
   useEffect(() => {
-    if (!sessionReady) return;
+    if (!sessionReady || !callActive) return;
     if (!interim || interim === lastInterimRef.current) return;
     lastInterimRef.current = interim;
 
@@ -123,10 +159,10 @@ export default function App() {
         at: Date.now(),
       }),
     }).catch(() => {});
-  }, [interim, serverUrl, sessionReady]);
+  }, [callActive, interim, serverUrl, sessionReady]);
 
   useEffect(() => {
-    if (!activeSessionId) return undefined;
+    if (!activeSessionId || !callActive || !sessionReady) return undefined;
 
     let cancelled = false;
     const fetchState = async () => {
@@ -180,23 +216,10 @@ export default function App() {
       cancelled = true;
       clearInterval(interval);
     };
-  }, [activeSessionId, serverUrl]);
+  }, [activeSessionId, callActive, serverUrl, sessionReady]);
 
   const metrics = useMemo(() => {
-    const byLabel = new Map();
-    keyNumbers.forEach((k) => {
-      const normalizedLabel = String(k?.label || '')
-        .toLowerCase()
-        .replace(/[^a-z0-9]+/g, ' ')
-        .trim();
-      if (!normalizedLabel) return;
-      byLabel.set(normalizedLabel, {
-        key: `num-${normalizedLabel}`,
-        label: String(k.label || '').trim(),
-        current: String(k.value || '').trim(),
-      });
-    });
-    return Array.from(byLabel.values()).filter((m) => m.current);
+    return deriveMetricsFromKeyNumbers(keyNumbers);
   }, [keyNumbers]);
 
   return (
@@ -235,12 +258,12 @@ export default function App() {
         >
           <CallScreenMvp
             supported={supported}
-            listening={listening}
+            listening={callActive}
             onStart={handleStart}
             onStop={handleStop}
             onClear={handleClear}
-            lines={lines}
-            interim={interim}
+            lines={callActive ? lines : []}
+            interim={callActive ? interim : ''}
           />
         </div>
 
@@ -254,8 +277,8 @@ export default function App() {
               insights={insights}
               metrics={metrics}
               actionItems={[]}
-              isCallActive={listening}
-              isPlaying={listening}
+              isCallActive={callActive}
+              isPlaying={callActive}
             />
           </div>
         </div>
@@ -264,8 +287,8 @@ export default function App() {
       <CallSummaryModal
         isVisible={showSummaryModal}
         onClose={() => setShowSummaryModal(false)}
-        insights={insights}
-        metrics={metrics}
+        insights={summaryInsights}
+        metrics={summaryMetrics}
         callStartedAt={callStartedAt}
         callEndedAt={callEndedAt}
       />

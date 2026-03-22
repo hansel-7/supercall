@@ -16,6 +16,7 @@ export function useSpeechRecognition({ lang = 'en-US' } = {}) {
   const [lines, setLines] = useState([]);
   const recRef = useRef(null);
   const keepAliveRef = useRef(false);
+  const captureEnabledRef = useRef(false);
   const restartTimerRef = useRef(null);
   const startAttemptRef = useRef(0);
   const MAX_RESTART_ATTEMPTS = 8;
@@ -26,6 +27,7 @@ export function useSpeechRecognition({ lang = 'en-US' } = {}) {
 
   const stop = useCallback(() => {
     keepAliveRef.current = false;
+    captureEnabledRef.current = false;
     if (restartTimerRef.current) {
       clearTimeout(restartTimerRef.current);
       restartTimerRef.current = null;
@@ -44,11 +46,27 @@ export function useSpeechRecognition({ lang = 'en-US' } = {}) {
     setInterim('');
   }, []);
 
+  const setCaptureEnabled = useCallback((enabled) => {
+    captureEnabledRef.current = Boolean(enabled);
+    if (!enabled) {
+      setInterim('');
+    }
+  }, []);
+
   const start = useCallback(() => {
     const Ctor = getRecognitionCtor();
     if (!Ctor) return;
 
-    stop();
+    captureEnabledRef.current = true;
+    if (recRef.current) {
+      keepAliveRef.current = true;
+      if (restartTimerRef.current) {
+        clearTimeout(restartTimerRef.current);
+        restartTimerRef.current = null;
+      }
+      return;
+    }
+
     keepAliveRef.current = true;
     startAttemptRef.current = 0;
 
@@ -85,6 +103,10 @@ export function useSpeechRecognition({ lang = 'en-US' } = {}) {
     };
 
     rec.onresult = (event) => {
+      if (!captureEnabledRef.current) {
+        setInterim('');
+        return;
+      }
       let interimText = '';
       for (let i = event.resultIndex; i < event.results.length; i++) {
         const r = event.results[i];
@@ -154,7 +176,7 @@ export function useSpeechRecognition({ lang = 'en-US' } = {}) {
       }
     };
     beginStart(0);
-  }, [lang, stop]);
+  }, [lang]);
 
   const clearLines = useCallback(() => {
     setLines([]);
@@ -173,5 +195,5 @@ export function useSpeechRecognition({ lang = 'en-US' } = {}) {
     [stop]
   );
 
-  return { supported, listening, interim, lines, start, stop, clearLines };
+  return { supported, listening, interim, lines, start, stop, clearLines, setCaptureEnabled };
 }
