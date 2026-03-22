@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Phone } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Phone } from 'lucide-react';
 import AIAssistantPanel from './components/AIAssistantPanel';
 import CallScreenMvp from './components/CallScreenMvp';
 import { useSpeechRecognition } from './hooks/useSpeechRecognition';
@@ -24,6 +24,7 @@ export default function App() {
   const [topic, setTopic] = useState('unknown');
   const [keyNumbers, setKeyNumbers] = useState([]);
   const [insights, setInsights] = useState([]);
+  const [isAssistantDrawerOpen, setIsAssistantDrawerOpen] = useState(true);
 
   const resetUiState = useCallback(() => {
     clearLines();
@@ -198,11 +199,22 @@ export default function App() {
           <span>Live Meeting</span>
           <span className="text-gray-700">|</span>
           <span>Realtime Captions</span>
+          <span className="text-gray-700">|</span>
+          <button
+            type="button"
+            onClick={() => setIsAssistantDrawerOpen((prev) => !prev)}
+            className="inline-flex items-center gap-1.5 rounded-md border border-white/10 bg-surface-800/95 px-2 py-1 text-[11px] font-medium text-gray-300 transition-colors hover:text-white hover:bg-surface-700"
+            aria-label={isAssistantDrawerOpen ? 'Close insights drawer' : 'Open insights drawer'}
+            title={isAssistantDrawerOpen ? 'Close insights drawer' : 'Open insights drawer'}
+          >
+            {isAssistantDrawerOpen ? <ChevronRight className="w-3.5 h-3.5" /> : <ChevronLeft className="w-3.5 h-3.5" />}
+            <span>AI Panel</span>
+          </button>
         </div>
       </header>
 
-      <main className="flex-1 min-h-0 flex gap-3 p-3">
-        <div className="w-[55%] flex-shrink-0">
+      <main className="relative flex-1 min-h-0 p-3">
+        <div className="h-full w-full">
           <CallScreenMvp
             supported={supported}
             listening={listening}
@@ -213,14 +225,21 @@ export default function App() {
             interim={interim}
           />
         </div>
-        <div className="flex-1 min-w-0">
-          <AIAssistantPanel
-            insights={insights}
-            metrics={metrics}
-            actionItems={[]}
-            isCallActive={listening}
-            isPlaying={listening}
-          />
+
+        <div
+          className={`absolute top-3 right-3 bottom-3 w-[26rem] max-w-[85vw] transition-transform duration-300 ease-out z-10 ${
+            isAssistantDrawerOpen ? 'translate-x-0' : 'translate-x-[110%]'
+          }`}
+        >
+          <div className="h-full rounded-xl border border-white/10 bg-surface-900/95 backdrop-blur-sm p-3">
+            <AIAssistantPanel
+              insights={insights}
+              metrics={metrics}
+              actionItems={[]}
+              isCallActive={listening}
+              isPlaying={listening}
+            />
+          </div>
         </div>
       </main>
     </div>
