@@ -16,8 +16,10 @@ export function useSpeechRecognition({ lang = 'en-US' } = {}) {
   const [lines, setLines] = useState([]);
   const recRef = useRef(null);
   const keepAliveRef = useRef(false);
+  const captureEnabledRef = useRef(false);
   const restartTimerRef = useRef(null);
   const startAttemptRef = useRef(0);
+  const MAX_RESTART_ATTEMPTS = 8;
 
   useEffect(() => {
     setSupported(Boolean(getRecognitionCtor()));
@@ -25,6 +27,7 @@ export function useSpeechRecognition({ lang = 'en-US' } = {}) {
 
   const stop = useCallback(() => {
     keepAliveRef.current = false;
+    captureEnabledRef.current = false;
     if (restartTimerRef.current) {
       clearTimeout(restartTimerRef.current);
       restartTimerRef.current = null;
@@ -43,11 +46,27 @@ export function useSpeechRecognition({ lang = 'en-US' } = {}) {
     setInterim('');
   }, []);
 
+  const setCaptureEnabled = useCallback((enabled) => {
+    captureEnabledRef.current = Boolean(enabled);
+    if (!enabled) {
+      setInterim('');
+    }
+  }, []);
+
   const start = useCallback(() => {
     const Ctor = getRecognitionCtor();
     if (!Ctor) return;
 
-    stop();
+    captureEnabledRef.current = true;
+    if (recRef.current) {
+      keepAliveRef.current = true;
+      if (restartTimerRef.current) {
+        clearTimeout(restartTimerRef.current);
+        restartTimerRef.current = null;
+      }
+      return;
+    }
+
     keepAliveRef.current = true;
     startAttemptRef.current = 0;
 
@@ -56,7 +75,38 @@ export function useSpeechRecognition({ lang = 'en-US' } = {}) {
     rec.interimResults = true;
     rec.lang = lang;
 
+    const scheduleRestart = () => {
+      if (!keepAliveRef.current || recRef.current !== rec) return;
+      if (startAttemptRef.current >= MAX_RESTART_ATTEMPTS) {
+        keepAliveRef.current = false;
+        recRef.current = null;
+        setListening(false);
+        return;
+      }
+      const retryDelay = 200 + startAttemptRef.current * 180;
+      startAttemptRef.current += 1;
+      if (restartTimerRef.current) {
+        clearTimeout(restartTimerRef.current);
+        restartTimerRef.current = null;
+      }
+      restartTimerRef.current = setTimeout(() => {
+        restartTimerRef.current = null;
+        if (!keepAliveRef.current || recRef.current !== rec) return;
+        try {
+          rec.start();
+          startAttemptRef.current = 0;
+          setListening(true);
+        } catch {
+          scheduleRestart();
+        }
+      }, retryDelay);
+    };
+
     rec.onresult = (event) => {
+      if (!captureEnabledRef.current) {
+        setInterim('');
+        return;
+      }
       let interimText = '';
       for (let i = event.resultIndex; i < event.results.length; i++) {
         const r = event.results[i];
@@ -84,7 +134,9 @@ export function useSpeechRecognition({ lang = 'en-US' } = {}) {
         keepAliveRef.current = false;
         setListening(false);
         recRef.current = null;
+        return;
       }
+      scheduleRestart();
     };
 
     rec.onend = () => {
@@ -97,26 +149,9 @@ export function useSpeechRecognition({ lang = 'en-US' } = {}) {
       try {
         rec.start();
         startAttemptRef.current = 0;
+        setListening(true);
       } catch {
-        if (startAttemptRef.current < 3) {
-          const retryDelay = 150 * (startAttemptRef.current + 1);
-          startAttemptRef.current += 1;
-          restartTimerRef.current = setTimeout(() => {
-            restartTimerRef.current = null;
-            if (!keepAliveRef.current || recRef.current !== rec) return;
-            try {
-              rec.start();
-              startAttemptRef.current = 0;
-              setListening(true);
-            } catch {
-              // Let onend continue retry sequence until attempts are exhausted.
-            }
-          }, retryDelay);
-          return;
-        }
-        keepAliveRef.current = false;
-        recRef.current = null;
-        setListening(false);
+        scheduleRestart();
       }
     };
 
@@ -128,7 +163,7 @@ export function useSpeechRecognition({ lang = 'en-US' } = {}) {
         startAttemptRef.current = 0;
       } catch {
         // SpeechRecognition can throw when restarted too quickly after stop.
-        if (attempt < 4 && keepAliveRef.current && recRef.current === rec) {
+        if (attempt < 6 && keepAliveRef.current && recRef.current === rec) {
           restartTimerRef.current = setTimeout(() => {
             restartTimerRef.current = null;
             beginStart(attempt + 1);
@@ -141,7 +176,7 @@ export function useSpeechRecognition({ lang = 'en-US' } = {}) {
       }
     };
     beginStart(0);
-  }, [lang, stop]);
+  }, [lang]);
 
   const clearLines = useCallback(() => {
     setLines([]);
@@ -160,5 +195,5 @@ export function useSpeechRecognition({ lang = 'en-US' } = {}) {
     [stop]
   );
 
-  return { supported, listening, interim, lines, start, stop, clearLines };
+  return { supported, listening, interim, lines, start, stop, clearLines, setCaptureEnabled };
 }
