@@ -2,10 +2,12 @@ import express from 'express';
 import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { randomUUID } from 'crypto';
+import { createHash, randomUUID } from 'crypto';
+import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+dotenv.config({ path: path.join(__dirname, '../.env') });
 dotenv.config({ path: path.join(__dirname, '.env') });
 
 const app = express();
@@ -20,6 +22,28 @@ const INSIGHT_ANALYSIS_COOLDOWN_MS = 12000;
 const INSIGHT_MIN_FINAL_CHUNKS = 2;
 const INSIGHT_MIN_TEXT_LENGTH = 12;
 const QUALITATIVE_INSIGHT_CATEGORIES = ['fact', 'risk', 'obstacle', 'next_step', 'question'];
+const S3_BUCKET = String(process.env.S3_BUCKET || 'project-bucket-3011').trim();
+const S3_PREFIX = String(process.env.S3_PREFIX || 'super-call/').trim().replace(/^\/+/, '');
+const AWS_REGION = String(process.env.AWS_REGION || 'ap-southeast-1').trim();
+const AWS_ACCESS_KEY_ID = String(process.env.AWS_ACCESS_KEY_ID || '').trim();
+const AWS_SECRET_ACCESS_KEY = String(process.env.AWS_SECRET_ACCESS_KEY || '').trim();
+const S3_UPLOAD_DEBOUNCE_MS = 1200;
+const s3Enabled = Boolean(S3_BUCKET && AWS_REGION && AWS_ACCESS_KEY_ID && AWS_SECRET_ACCESS_KEY);
+const s3Client = s3Enabled
+  ? new S3Client({
+      region: AWS_REGION,
+      credentials: {
+        accessKeyId: AWS_ACCESS_KEY_ID,
+        secretAccessKey: AWS_SECRET_ACCESS_KEY,
+      },
+    })
+  : null;
+
+if (!s3Enabled) {
+  console.warn(
+    '[s3] disabled: set AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_REGION, S3_BUCKET, S3_PREFIX'
+  );
+}
 
 app.use((req, res, next) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -53,6 +77,9 @@ function clearAllSessionMemory() {
     if (session?.insightAnalysisTimer) {
       clearTimeout(session.insightAnalysisTimer);
     }
+    if (session?.s3UploadTimer) {
+      clearTimeout(session.s3UploadTimer);
+    }
   });
   sessionStore.clear();
 }
@@ -78,6 +105,8 @@ app.post('/session', (_req, res) => {
     pendingInsightFinalCount: 0,
     pendingInsightTopic: 'unknown',
     lastInsightSourceText: '',
+    s3UploadTimer: null,
+    lastUploadedStateHash: '',
     insightMemory: {
       lastTopic: 'unknown',
       facts: [],
@@ -144,6 +173,8 @@ function getSession(sessionId) {
       pendingInsightFinalCount: 0,
       pendingInsightTopic: 'unknown',
       lastInsightSourceText: '',
+      s3UploadTimer: null,
+      lastUploadedStateHash: '',
       insightMemory: {
         lastTopic: 'unknown',
         facts: [],
@@ -261,6 +292,96 @@ function upsertMetricInsight(session, metric) {
 
   insights.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
   session.insights = insights.slice(0, 24);
+}
+
+function getS3SessionPrefix(sessionId) {
+  const prefix = S3_PREFIX.endsWith('/') ? S3_PREFIX : `${S3_PREFIX}/`;
+  const cleanSession = String(sessionId || 'default').replace(/[^a-zA-Z0-9_-]/g, '_');
+  return `${prefix}${cleanSession}/`;
+}
+
+function buildS3Payload(sessionId, session) {
+  return {
+    sessionId,
+    topic: session.topic || 'unknown',
+    keyNumbers: Array.isArray(session.keyNumbers) ? session.keyNumbers : [],
+    metricUpdates: Array.isArray(session.metricUpdates) ? session.metricUpdates.slice(-200) : [],
+    insights: Array.isArray(session.insights)
+      ? session.insights.map((insight) => enrichInsightForClient(insight))
+      : [],
+    updatedAt: new Date().toISOString(),
+  };
+}
+
+async function uploadSessionStateToS3(sessionId) {
+  if (!s3Enabled || !s3Client) return;
+  const session = getSession(sessionId);
+  const payload = buildS3Payload(sessionId, session);
+  const body = JSON.stringify(payload, null, 2);
+  const hash = createHash('sha256').update(body).digest('hex');
+  if (session.lastUploadedStateHash === hash) return;
+
+  const sessionPrefix = getS3SessionPrefix(sessionId);
+  const metricsBody = JSON.stringify(
+    {
+      sessionId,
+      topic: payload.topic,
+      keyNumbers: payload.keyNumbers,
+      metricUpdates: payload.metricUpdates,
+      updatedAt: payload.updatedAt,
+    },
+    null,
+    2
+  );
+  const insightsBody = JSON.stringify(
+    {
+      sessionId,
+      insights: payload.insights,
+      updatedAt: payload.updatedAt,
+    },
+    null,
+    2
+  );
+
+  await Promise.all([
+    s3Client.send(
+      new PutObjectCommand({
+        Bucket: S3_BUCKET,
+        Key: `${sessionPrefix}key-metrics.json`,
+        Body: metricsBody,
+        ContentType: 'application/json',
+      })
+    ),
+    s3Client.send(
+      new PutObjectCommand({
+        Bucket: S3_BUCKET,
+        Key: `${sessionPrefix}live-insights.json`,
+        Body: insightsBody,
+        ContentType: 'application/json',
+      })
+    ),
+  ]);
+
+  session.lastUploadedStateHash = hash;
+  console.log(`[s3] uploaded ${S3_BUCKET}/${sessionPrefix}`);
+}
+
+function scheduleS3Upload(sessionId) {
+  const session = getSession(sessionId);
+  if (!s3Enabled || !s3Client) return;
+
+  if (session.s3UploadTimer) {
+    clearTimeout(session.s3UploadTimer);
+    session.s3UploadTimer = null;
+  }
+
+  session.s3UploadTimer = setTimeout(() => {
+    const s = getSession(sessionId);
+    s.s3UploadTimer = null;
+    uploadSessionStateToS3(sessionId).catch((err) => {
+      console.error(`[s3] upload failed for ${sessionId}: ${err.message}`);
+    });
+  }, S3_UPLOAD_DEBOUNCE_MS);
 }
 
 function normalizeInsightKey(value) {
@@ -766,6 +887,7 @@ function runMetricAnalysisNow(sessionId) {
             });
             upsertMetricInsight(s, metric);
           });
+          scheduleS3Upload(sessionId);
         }
       }
 
@@ -826,6 +948,7 @@ function runInsightAnalysisNow(sessionId, detectedTopic) {
           upsertQualitativeInsightCard(s, detectedTopic || s.topic, insight)
         );
         if (changed.length > 0) {
+          scheduleS3Upload(sessionId);
           console.log(
             `[${ts}] [${sessionId}] [insights] ${changed
               .map((i) => `${i.category}:${i.title}`)
@@ -944,6 +1067,9 @@ app.post('/transcript/reset', (req, res) => {
   }
   if (existing?.insightAnalysisTimer) {
     clearTimeout(existing.insightAnalysisTimer);
+  }
+  if (existing?.s3UploadTimer) {
+    clearTimeout(existing.s3UploadTimer);
   }
   sessionStore.delete(normalizedSessionId);
   res.json({ ok: true, sessionId: normalizedSessionId });
