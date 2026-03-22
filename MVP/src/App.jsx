@@ -213,8 +213,12 @@ export default function App() {
         </div>
       </header>
 
-      <main className="relative flex-1 min-h-0 p-3">
-        <div className="h-full w-full">
+      <main className="relative flex-1 min-h-0 p-2 sm:p-3">
+        <div
+          className={`h-full w-full transition-[padding-right] duration-300 ease-out ${
+            isAssistantDrawerOpen ? 'lg:pr-[calc(26rem+0.75rem)]' : ''
+          }`}
+        >
           <CallScreenMvp
             supported={supported}
             listening={listening}
@@ -227,7 +231,7 @@ export default function App() {
         </div>
 
         <div
-          className={`absolute top-3 right-3 bottom-3 w-[26rem] max-w-[85vw] transition-transform duration-300 ease-out z-10 ${
+          className={`absolute top-2 right-2 bottom-2 sm:top-3 sm:right-3 sm:bottom-3 w-[92vw] sm:w-[22rem] lg:w-[26rem] max-w-[92vw] sm:max-w-[85vw] transition-transform duration-300 ease-out z-10 ${
             isAssistantDrawerOpen ? 'translate-x-0' : 'translate-x-[110%]'
           }`}
         >
