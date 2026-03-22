@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ChevronLeft, ChevronRight, Phone } from 'lucide-react';
 import AIAssistantPanel from './components/AIAssistantPanel';
 import CallScreenMvp from './components/CallScreenMvp';
+import CallSummaryModal from './components/CallSummaryModal';
 import { useSpeechRecognition } from './hooks/useSpeechRecognition';
 
 function sanitizeInsightText(value) {
@@ -25,6 +26,9 @@ export default function App() {
   const [keyNumbers, setKeyNumbers] = useState([]);
   const [insights, setInsights] = useState([]);
   const [isAssistantDrawerOpen, setIsAssistantDrawerOpen] = useState(true);
+  const [showSummaryModal, setShowSummaryModal] = useState(false);
+  const [callStartedAt, setCallStartedAt] = useState(null);
+  const [callEndedAt, setCallEndedAt] = useState(null);
 
   const resetUiState = useCallback(() => {
     clearLines();
@@ -37,6 +41,9 @@ export default function App() {
   }, [clearLines]);
 
   const handleStart = useCallback(async () => {
+    setShowSummaryModal(false);
+    setCallStartedAt(new Date().toISOString());
+    setCallEndedAt(null);
     resetUiState();
     // Start microphone capture immediately in direct user gesture context.
     start();
@@ -62,6 +69,7 @@ export default function App() {
   }, [resetUiState, serverUrl, start]);
 
   const handleClear = useCallback(() => {
+    setShowSummaryModal(false);
     resetUiState();
     fetch(`${serverUrl}/transcript/reset`, {
       method: 'POST',
@@ -69,6 +77,12 @@ export default function App() {
       body: JSON.stringify({ sessionId: sessionIdRef.current }),
     }).catch(() => {});
   }, [resetUiState, serverUrl]);
+
+  const handleStop = useCallback(() => {
+    stop();
+    setCallEndedAt(new Date().toISOString());
+    setShowSummaryModal(true);
+  }, [stop]);
 
   useEffect(() => {
     if (!sessionReady) return;
@@ -223,7 +237,7 @@ export default function App() {
             supported={supported}
             listening={listening}
             onStart={handleStart}
-            onStop={stop}
+            onStop={handleStop}
             onClear={handleClear}
             lines={lines}
             interim={interim}
@@ -246,6 +260,15 @@ export default function App() {
           </div>
         </div>
       </main>
+
+      <CallSummaryModal
+        isVisible={showSummaryModal}
+        onClose={() => setShowSummaryModal(false)}
+        insights={insights}
+        metrics={metrics}
+        callStartedAt={callStartedAt}
+        callEndedAt={callEndedAt}
+      />
     </div>
   );
 }
